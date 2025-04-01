@@ -1,0 +1,103 @@
+---
+# deployment.yml - Tasks for creating and deploying to the EKS cluster
+
+- name: Create EKS cluster (this will take ~15 minutes)
+  shell: |
+    eksctl create cluster \
+      --name cloudmart \
+      --region {{ aws_region }} \
+      --nodegroup-name standard-workers \
+      --node-type t3.medium \
+      --nodes 1 \
+      --with-oidc \
+      --managed
+  args:
+    executable: /bin/bash
+  become_user: "{{ ec2_username }}"
+  register: eks_create
+  # Use async to prevent Ansible timeout during cluster creation
+  async: 1800  # 30 minutes
+  poll: 0
+  
+- name: Check EKS cluster creation status
+  async_status:
+    jid: "{{ eks_create.ansible_job_id }}"
+  register: job_result
+  until: job_result.finished
+  retries: 60  # Check for 30 minutes (60 x 30 seconds)
+  delay: 30
+  
+- name: Update kubectl configuration
+  shell: aws eks update-kubeconfig --name cloudmart --region {{ aws_region }}
+  args:
+    executable: /bin/bash
+  become_user: "{{ ec2_username }}"
+  register: kubeconfig_update
+  
+- name: Create IAM service account for CloudMart pods
+  shell: |
+    eksctl create iamserviceaccount \
+      --cluster=cloudmart \
+      --name=cloudmart-pod-execution-role \
+      --role-name CloudMartPodExecutionRole \
+      --attach-policy-arn=arn:aws:iam::aws:policy/AdministratorAccess \
+      --region {{ aws_region }} \
+      --approve
+  args:
+    executable: /bin/bash
+  become_user: "{{ ec2_username }}"
+  register: iam_sa_create
+  
+- name: Create backend deployment file
+  template:
+    src: templates/backend-deployment.yaml.j2
+    dest: /home/ec2-user/k8s/backend-deployment.yaml
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0644'
+    
+- name: Create frontend deployment file
+  template:
+    src: templates/frontend-deployment.yaml.j2
+    dest: /home/ec2-user/k8s/frontend-deployment.yaml
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0644'
+    
+- name: Apply backend deployment
+  shell: kubectl apply -f /home/ec2-user/k8s/backend-deployment.yaml
+  args:
+    executable: /bin/bash
+  become_user: "{{ ec2_username }}"
+  register: backend_deployment
+  
+- name: Apply frontend deployment
+  shell: kubectl apply -f /home/ec2-user/k8s/frontend-deployment.yaml
+  args:
+    executable: /bin/bash
+  become_user: "{{ ec2_username }}"
+  register: frontend_deployment
+  
+- name: Wait for services to be provisioned (load balancers take time)
+  pause:
+    seconds: 60
+    prompt: "Waiting for Kubernetes services to be provisioned..."
+    
+- name: Get Kubernetes services status
+  shell: kubectl get services
+  args:
+    executable: /bin/bash
+  become_user: "{{ ec2_username }}"
+  register: k8s_services
+  changed_when: false
+  
+- name: Log Kubernetes deployments status
+  copy:
+    dest: "{{ log_dir }}/kubernetes_deployment_{{ ansible_date_time.date }}.txt"
+    content: |
+      Backend Deployment: {{ backend_deployment.stdout }}
+      Frontend Deployment: {{ frontend_deployment.stdout }}
+      Kubernetes Services: {{ k8s_services.stdout }}
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0644'

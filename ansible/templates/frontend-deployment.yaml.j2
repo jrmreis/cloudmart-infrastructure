@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudmart-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cloudmart-frontend
+  template:
+    metadata:
+      labels:
+        app: cloudmart-frontend
+    spec:
+      containers:
+      - name: cloudmart-frontend
+        image: {{ frontend_ecr_repo }}:latest
+        ports:
+        - containerPort: 5001
+        env:
+        - name: VITE_API_BASE_URL
+          value: "http://cloudmart-backend-service/api"
+        resources:
+          limits:
+            cpu: "0.5"
+            memory: "512Mi"
+          requests:
+            cpu: "0.2"
+            memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloudmart-frontend-service
+spec:
+  selector:
+    app: cloudmart-frontend
+  ports:
+  - port: 80
+    targetPort: 5001
+  type: LoadBalancer

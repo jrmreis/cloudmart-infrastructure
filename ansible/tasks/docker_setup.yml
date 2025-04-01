@@ -1,0 +1,36 @@
+---
+# docker_setup.yml - Tasks for Docker installation and configuration
+
+- name: Install Docker
+  yum:
+    name: docker
+    state: present
+  register: docker_install
+  
+- name: Start and enable Docker service
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+  register: docker_service
+  
+- name: Add ec2-user to docker group
+  user:
+    name: "{{ ec2_username }}"
+    groups: docker
+    append: yes
+  register: docker_user
+  
+- name: Test Docker installation
+  command: docker run hello-world
+  register: docker_test
+  changed_when: false
+  
+- name: Log Docker installation status
+  copy:
+    dest: "{{ log_dir }}/docker_install_{{ ansible_date_time.date }}.txt"
+    content: |
+      Docker Installation: {{ docker_install.changed }}
+      Docker Service: {{ docker_service.changed }}
+      Docker User: {{ docker_user.changed }}
+      Docker Test: {{ docker_test.stdout }}

@@ -1,0 +1,115 @@
+---
+# kubernetes_setup.yml - Tasks for installing EKS tools and setting up Kubernetes
+
+- name: Install eksctl
+  block:
+    - name: Download eksctl
+      get_url:
+        url: "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_{{ ansible_system }}_amd64.tar.gz"
+        dest: /tmp/eksctl.tar.gz
+        mode: '0644'
+      
+    - name: Extract eksctl
+      unarchive:
+        src: /tmp/eksctl.tar.gz
+        dest: /tmp
+        remote_src: yes
+      
+    - name: Move eksctl to /usr/bin
+      copy:
+        src: /tmp/eksctl
+        dest: /usr/bin/eksctl
+        mode: '0755'
+        remote_src: yes
+        
+    - name: Verify eksctl installation
+      command: eksctl version
+      register: eksctl_version
+      changed_when: false
+      
+    - name: Log eksctl installation
+      copy:
+        dest: "{{ log_dir }}/eksctl_install_{{ ansible_date_time.date }}.txt"
+        content: "{{ eksctl_version.stdout }}"
+
+- name: Install kubectl
+  block:
+    - name: Download kubectl
+      get_url:
+        url: "https://amazon-eks.s3.us-west-2.amazonaws.com/1.18.9/2020-11-02/bin/linux/amd64/kubectl"
+        dest: /tmp/kubectl
+        mode: '0755'
+        
+    - name: Create bin directory for ec2-user
+      file:
+        path: /home/ec2-user/bin
+        state: directory
+        owner: "{{ ec2_username }}"
+        group: "{{ ec2_username }}"
+        mode: '0755'
+        
+    - name: Copy kubectl to user bin directory
+      copy:
+        src: /tmp/kubectl
+        dest: /home/ec2-user/bin/kubectl
+        owner: "{{ ec2_username }}"
+        group: "{{ ec2_username }}"
+        mode: '0755'
+        remote_src: yes
+        
+    - name: Link kubectl to system path
+      file:
+        src: /home/ec2-user/bin/kubectl
+        dest: /usr/local/bin/kubectl
+        state: link
+        
+    - name: Update bashrc with PATH
+      lineinfile:
+        path: /home/ec2-user/.bashrc
+        line: 'export PATH=$PATH:$HOME/bin'
+        state: present
+        
+    - name: Verify kubectl installation
+      command: kubectl version --short --client
+      register: kubectl_version
+      changed_when: false
+      
+    - name: Log kubectl installation
+      copy:
+        dest: "{{ log_dir }}/kubectl_install_{{ ansible_date_time.date }}.txt"
+        content: "{{ kubectl_version.stdout }}"
+
+- name: Authenticate with ECR
+  shell: |
+    ECR_REGISTRY=$(echo "{{ backend_ecr_repo }}" | sed 's/\/.*$//')
+    aws ecr get-login-password --region {{ aws_region }} | docker login --username AWS --password-stdin $ECR_REGISTRY
+  args:
+    executable: /bin/bash
+  become_user: "{{ ec2_username }}"
+  register: ecr_auth
+  
+- name: Tag and push backend image to ECR
+  shell: |
+    docker tag cloudmart-backend:latest {{ backend_ecr_repo }}:latest
+    docker push {{ backend_ecr_repo }}:latest
+  args:
+    executable: /bin/bash
+  become_user: "{{ ec2_username }}"
+  register: backend_push
+  
+- name: Tag and push frontend image to ECR
+  shell: |
+    docker tag cloudmart-frontend:latest {{ frontend_ecr_repo }}:latest
+    docker push {{ frontend_ecr_repo }}:latest
+  args:
+    executable: /bin/bash
+  become_user: "{{ ec2_username }}"
+  register: frontend_push
+
+- name: Create k8s directory
+  file:
+    path: /home/ec2-user/k8s
+    state: directory
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0755'

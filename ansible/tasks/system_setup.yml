@@ -1,0 +1,57 @@
+---
+# system_setup.yml - Tasks for basic system setup
+
+- name: Update system packages
+  yum:
+    name: "*"
+    state: latest
+    update_only: yes
+  register: update_result
+  
+- name: Log system update results
+  copy:
+    dest: "{{ log_dir }}/system_update_{{ ansible_date_time.date }}.txt"
+    content: "{{ update_result | to_nice_yaml }}"
+    
+- name: Install required packages
+  yum:
+    name:
+      - yum-utils
+      - git
+      - wget
+      - unzip
+      - tar
+      - curl
+      - jq
+      - python3-pip
+    state: present
+  register: packages_result
+  
+- name: Add HashiCorp repository
+  shell: yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
+  args:
+    creates: /etc/yum.repos.d/hashicorp.repo
+    
+- name: Install Terraform
+  yum:
+    name: terraform
+    state: present
+  register: terraform_install
+  
+- name: Verify Terraform installation
+  command: terraform version
+  register: terraform_version
+  changed_when: false
+  
+- name: Log Terraform installation
+  copy:
+    dest: "{{ log_dir }}/terraform_install_{{ ansible_date_time.date }}.txt"
+    content: "{{ terraform_version.stdout }}"
+
+- name: Clone CloudMart repository
+  git:
+    repo: https://github.com/jrmreis/cloudmart.git
+    dest: /home/ec2-user/cloudmart
+    clone: yes
+  become_user: "{{ ec2_username }}"
+  register: git_clone

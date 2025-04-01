@@ -1,0 +1,41 @@
+# CloudMart Deployment
+
+## Setup Information
+- Instance ID: {{ instance_id }}
+- Public IP: {{ public_ip }}
+- Setup completed: {{ ansible_date_time.iso8601 }}
+
+## Important Directories
+- CloudMart Source: /home/ec2-user/cloudmart
+- Challenge Files: /home/ec2-user/challenge-day2
+- Kubernetes Configs: /home/ec2-user/k8s
+- Logs: {{ log_dir }}
+
+## Health Check
+Run the health check script to see the current status of your deployment:
+```
+./health-check.sh
+```
+
+## Docker Containers
+Access the applications directly:
+- Backend: http://{{ public_ip }}:5000
+- Frontend: http://{{ public_ip }}:5001
+
+## Kubernetes Services
+Get the load balancer URLs:
+```
+kubectl get services
+```
+
+The Kubernetes services will be accessible at the Load Balancer URLs once fully provisioned.
+
+## Cleanup
+To delete the EKS cluster and resources when you're done:
+```
+./cleanup-cloudmart.sh
+```
+
+## Logs
+All setup logs are available in the {{ log_dir }} directory.
+An archive of all logs is also available at /home/ec2-user/logs-archive-*.tar.gz

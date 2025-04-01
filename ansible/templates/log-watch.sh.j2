@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# Watch the most recent setup log file
+watch "tail -n 25 \$(ls -t {{ log_dir }}/setup_*.txt | head -1)"

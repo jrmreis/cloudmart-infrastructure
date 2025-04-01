@@ -1,0 +1,26 @@
+---
+# utility_scripts.yml - Tasks for creating utility scripts
+
+- name: Create health check script
+  template:
+    src: templates/health-check.sh.j2
+    dest: /home/ec2-user/health-check.sh
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0755'
+    
+- name: Create cleanup script
+  template:
+    src: templates/cleanup-cloudmart.sh.j2
+    dest: /home/ec2-user/cleanup-cloudmart.sh
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0755'
+    
+- name: Create log-watch script
+  template:
+    src: templates/log-watch.sh.j2
+    dest: /home/ec2-user/log-watch.sh
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0755'
