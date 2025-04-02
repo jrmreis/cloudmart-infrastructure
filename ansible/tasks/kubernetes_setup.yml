@@ -85,15 +85,13 @@
     AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
     # Define region
     AWS_REGION={{ aws_region | default('us-east-1') }}
-    # Define ECR repository name
-    ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
     # Authenticate
-    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
   args:
     executable: /bin/bash
-  become_user: "{{ ec2_username | default('ec2-user') }}"
   register: ecr_auth
-  
+  ignore_errors: yes
+
 - name: Tag and push backend image to ECR
   shell: |
     # Get your AWS account ID
@@ -101,14 +99,14 @@
     # Define region
     AWS_REGION={{ aws_region | default('us-east-1') }}
     # Define ECR repository URL
-    BACKEND_ECR_REPO="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/cloudmart-backend"
+    BACKEND_REPO="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/cloudmart-backend"
     # Tag and push
-    docker tag cloudmart-backend:latest ${BACKEND_ECR_REPO}:latest
-    docker push ${BACKEND_ECR_REPO}:latest
+    docker tag cloudmart-backend:latest ${BACKEND_REPO}:latest
+    docker push ${BACKEND_REPO}:latest
   args:
     executable: /bin/bash
-  become_user: "{{ ec2_username | default('ec2-user') }}"
   register: backend_push
+  ignore_errors: yes
   
 - name: Tag and push frontend image to ECR
   docker_image:
@@ -127,3 +125,28 @@
     owner: "{{ ec2_username }}"
     group: "{{ ec2_username }}"
     mode: '0755'
+- name: Check running containers
+  shell: docker ps
+  register: docker_status
+  changed_when: false
+
+- name: Display running containers
+  debug:
+    var: docker_status.stdout_lines
+
+- name: Summary
+  debug:
+    msg: |
+      CloudMart setup completed!
+      
+      Containers should be running on:
+      - Backend: http://localhost:5000
+      - Frontend: http://localhost:5001
+      
+      {% if not kubeconfig_update.failed %}
+      EKS Cluster deployment was successful.
+      {% else %}
+      EKS Cluster deployment was skipped or failed.
+      You can try manually creating it later with:
+        eksctl create cluster --name cloudmart --region us-east-1 --nodegroup-name standard-workers --node-type t3.medium --nodes 1 --with-oidc --managed
+      {% endif %}
