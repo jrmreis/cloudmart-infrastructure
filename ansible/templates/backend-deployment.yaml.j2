@@ -1,3 +1,6 @@
+{% set aws_account_id = lookup('pipe', 'aws sts get-caller-identity --query Account --output text') %}
+{% set aws_region = aws_region | default('us-east-1') %}
+{% set backend_repo = aws_account_id + '.dkr.ecr.' + aws_region + '.amazonaws.com/cloudmart-backend' %}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,14 +18,14 @@ spec:
       serviceAccountName: cloudmart-pod-execution-role
       containers:
       - name: cloudmart-backend
-        image: {{ backend_ecr_repo }}:latest
+        image: {{ backend_repo }}:latest
         ports:
         - containerPort: 5000
         env:
         - name: PORT
           value: "5000"
         - name: AWS_REGION
-          value: "{{ aws_region }}"
+          value: "{{ aws_region | default('us-east-1') }}"
         resources:
           limits:
             cpu: "0.5"

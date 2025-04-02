@@ -114,38 +114,52 @@
     mode: '0644'
     
 - name: Build backend Docker image
-  docker_image:
-    name: cloudmart-backend
-    build:
-      path: /home/ec2-user/challenge-day2/backend
-      pull: yes
-    source: build
+  command: docker build -t cloudmart-backend .
+  args:
+    chdir: /home/ec2-user/challenge-day2/backend
   become: yes
   
 - name: Build frontend Docker image
-  docker_image:
-    name: cloudmart-frontend
-    build:
-      path: /home/ec2-user/challenge-day2/frontend
-      pull: yes
-    source: build
+  command: docker build -t cloudmart-frontend .
+  args:
+    chdir: /home/ec2-user/challenge-day2/frontend
   become: yes
   
+- name: Check if backend container exists
+  shell: docker ps -a --filter name=cloudmart-backend-container --format {% raw %}"{{.Names}}"{% endraw %}
+  register: backend_container_exists
+  changed_when: false
+  become: yes
+
+- name: Remove stopped backend container if it exists but isn't running
+  command: docker rm cloudmart-backend-container
+  when: backend_container_exists.stdout == "cloudmart-backend-container" and "cloudmart-backend-container" not in "{{ lookup('pipe', 'docker ps --format {{.Names}}') }}"
+  become: yes
+  ignore_errors: yes
+
 - name: Run backend container
-  docker_container:
-    name: cloudmart-backend-container
-    image: cloudmart-backend
-    ports:
-      - "5000:5000"
-    env_file: /home/ec2-user/challenge-day2/backend/.env
-    restart_policy: always
+  command: docker run -d -p 5000:5000 --env-file .env --name cloudmart-backend-container cloudmart-backend
+  args:
+    chdir: /home/ec2-user/challenge-day2/backend
+  when: backend_container_exists.stdout == ""
   become: yes
-  
+
+- name: Check if frontend container exists
+  command: docker ps -a --filter name=cloudmart-frontend-container --format {% raw %}"{{.Names}}"{% endraw %}
+  register: frontend_container_exists
+  changed_when: false
+  become: yes
+
+- name: Remove stopped frontend container if it exists but isn't running
+  command: docker rm cloudmart-frontend-container
+  when: frontend_container_exists.stdout == "cloudmart-frontend-container" and "cloudmart-frontend-container" not in "{{ lookup('pipe', 'docker ps --format {{.Names}}') }}"
+  become: yes
+  ignore_errors: yes
+
 - name: Run frontend container
-  docker_container:
-    name: cloudmart-frontend-container
-    image: cloudmart-frontend
-    ports:
-      - "5001:5001"
-    restart_policy: always
+  command: docker run -d -p 5001:5001 --env-file .env --name cloudmart-frontend-container cloudmart-frontend
+  args:
+    chdir: /home/ec2-user/challenge-day2/frontend
+  when: frontend_container_exists.stdout == ""
   become: yes
+

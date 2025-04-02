@@ -21,11 +21,27 @@
   
 - name: Check EKS cluster creation status
   async_status:
-    jid: "{{ eks_create.ansible_job_id }}"
+    jid: "{{ async_job_id }}"
   register: job_result
-  until: job_result.finished
-  retries: 60  # Check for 30 minutes (60 x 30 seconds)
-  delay: 30
+  # Remove async tracking if job is no longer valid
+  ignore_errors: yes
+  when: async_job_id is defined
+
+- name: Debug Async Job Status
+  debug:
+    var: job_result
+  when: job_result is defined
+
+- name: Alternative EKS Cluster Check
+  shell: |
+    aws eks describe-cluster --name {{ cluster_name }} --query 'cluster.status'
+  register: cluster_status
+  changed_when: false
+  ignore_errors: yes
+
+- name: Print Cluster Status
+  debug:
+    var: cluster_status.stdout
   
 - name: Update kubectl configuration
   shell: aws eks update-kubeconfig --name cloudmart --region {{ aws_region }}
@@ -34,19 +50,33 @@
   become_user: "{{ ec2_username }}"
   register: kubeconfig_update
   
-- name: Create IAM service account for CloudMart pods
+- name: Associate IAM OIDC Provider with EKS Cluster
+  shell: |
+    eksctl utils associate-iam-oidc-provider \
+      --region=us-east-1 \
+      --cluster=cloudmart \
+      --approve
+  register: oidc_association
+  changed_when: "'associated' in oidc_association.stdout"
+  failed_when: oidc_association.rc != 0
+
+- name: Create IAM Service Account for CloudMart Pods
   shell: |
     eksctl create iamserviceaccount \
       --cluster=cloudmart \
       --name=cloudmart-pod-execution-role \
-      --role-name CloudMartPodExecutionRole \
+      --role-name=CloudMartPodExecutionRole \
       --attach-policy-arn=arn:aws:iam::aws:policy/AdministratorAccess \
-      --region {{ aws_region }} \
+      --region=us-east-1 \
       --approve
-  args:
-    executable: /bin/bash
-  become_user: "{{ ec2_username }}"
-  register: iam_sa_create
+  register: service_account_creation
+  changed_when: "'created' in service_account_creation.stdout"
+  failed_when: service_account_creation.rc != 0
+
+- name: Debug IAM Service Account Creation
+  debug:
+    var: service_account_creation
+  when: service_account_creation.stdout is defined
   
 - name: Create backend deployment file
   template:

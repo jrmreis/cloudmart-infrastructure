@@ -1,7 +1,7 @@
 ---
 # cloudmart_setup.yml - Main playbook for CloudMart workstation setup
 - name: Configure CloudMart Workstation
-  hosts: workstation
+  hosts: all
   become: yes
   vars:
     log_dir: "/home/ec2-user/logs"

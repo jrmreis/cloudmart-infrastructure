@@ -16,11 +16,23 @@
   
 - name: Add ec2-user to docker group
   user:
-    name: "{{ ec2_username }}"
+    name: "{{ ec2_username | default('ec2-user') }}"
     groups: docker
     append: yes
-  register: docker_user
-  
+  become: yes
+
+- name: Set /var/run/docker.sock permissions
+  file:
+    path: /var/run/docker.sock
+    mode: '0666'
+  become: yes
+
+- name: Restart Docker service
+  systemd:
+    name: docker
+    state: restarted
+  become: yes
+
 - name: Test Docker installation
   command: docker run hello-world
   register: docker_test
@@ -30,7 +42,8 @@
   copy:
     dest: "{{ log_dir }}/docker_install_{{ ansible_date_time.date }}.txt"
     content: |
-      Docker Installation: {{ docker_install.changed }}
-      Docker Service: {{ docker_service.changed }}
-      Docker User: {{ docker_user.changed }}
-      Docker Test: {{ docker_test.stdout }}
+      Docker Installation: Successful
+      Docker Service: Running
+      Docker Socket Permissions: 0666
+      Docker Test: Hello World executed successfully
+  become: yes

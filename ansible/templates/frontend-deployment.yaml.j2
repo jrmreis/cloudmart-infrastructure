@@ -1,3 +1,6 @@
+{% set aws_account_id = lookup('pipe', 'aws sts get-caller-identity --query Account --output text') %}
+{% set aws_region = aws_region | default('us-east-1') %}
+{% set frontend_repo = aws_account_id + '.dkr.ecr.' + aws_region + '.amazonaws.com/cloudmart-frontend' %}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -14,7 +17,7 @@ spec:
     spec:
       containers:
       - name: cloudmart-frontend
-        image: {{ frontend_ecr_repo }}:latest
+        image: {{ frontend_repo }}:latest
         ports:
         - containerPort: 5001
         env:
