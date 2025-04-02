@@ -5,11 +5,8 @@
   become: yes
   vars:
     log_dir: "/home/ec2-user/logs"
-    backend_ecr_repo: "{{ hostvars[inventory_hostname]['backend_ecr_repo'] }}"
-    frontend_ecr_repo: "{{ hostvars[inventory_hostname]['frontend_ecr_repo'] }}"
     aws_region: "us-east-1"
-    instance_id: "unknown"
-    public_ip: "{{ ansible_host }}"
+    cluster_name: "cloudmart"
     ec2_username: "ec2-user"
     
   pre_tasks:
