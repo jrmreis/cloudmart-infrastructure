@@ -126,15 +126,17 @@
   become: yes
   
 - name: Check if backend container exists
-  shell: docker ps -a --filter name=cloudmart-backend-container --format {% raw %}"{{.Names}}"{% endraw %}
-  register: backend_container_exists
+  shell: docker ps -a -q --filter name=cloudmart-backend-container | wc -l
+  register: backend_container_count
   changed_when: false
-  become: yes
 
 - name: Remove stopped backend container if it exists but isn't running
-  command: docker rm cloudmart-backend-container
-  when: backend_container_exists.stdout == "cloudmart-backend-container" and "cloudmart-backend-container" not in "{{ lookup('pipe', 'docker ps --format {{.Names}}') }}"
-  become: yes
+  shell: >
+    if [ $(docker ps -q --filter name=cloudmart-backend-container | wc -l) -eq 0 ] && 
+       [ $(docker ps -a -q --filter name=cloudmart-backend-container | wc -l) -gt 0 ]; then
+      docker rm cloudmart-backend-container
+    fi
+  when: backend_container_count.stdout != "0"
   ignore_errors: yes
 
 - name: Run backend container
@@ -145,15 +147,17 @@
   become: yes
 
 - name: Check if frontend container exists
-  command: docker ps -a --filter name=cloudmart-frontend-container --format {% raw %}"{{.Names}}"{% endraw %}
-  register: frontend_container_exists
+  shell: docker ps -a -q --filter name=cloudmart-frontend-container | wc -l
+  register: frontend_container_count
   changed_when: false
-  become: yes
 
 - name: Remove stopped frontend container if it exists but isn't running
-  command: docker rm cloudmart-frontend-container
-  when: frontend_container_exists.stdout == "cloudmart-frontend-container" and "cloudmart-frontend-container" not in "{{ lookup('pipe', 'docker ps --format {{.Names}}') }}"
-  become: yes
+  shell: >
+    if [ $(docker ps -q --filter name=cloudmart-frontend-container | wc -l) -eq 0 ] && 
+       [ $(docker ps -a -q --filter name=cloudmart-frontend-container | wc -l) -gt 0 ]; then
+      docker rm cloudmart-frontend-container
+    fi
+  when: frontend_container_count.stdout != "0"
   ignore_errors: yes
 
 - name: Run frontend container
