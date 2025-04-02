@@ -5,50 +5,31 @@
   shell: |
     eksctl create cluster \
       --name cloudmart \
-      --region {{ aws_region }} \
+      --region {{ aws_region | default('us-east-1') }} \
       --nodegroup-name standard-workers \
       --node-type t3.medium \
       --nodes 1 \
       --with-oidc \
-      --managed
+      --managed || true
+  register: create_cluster
   args:
     executable: /bin/bash
-  become_user: "{{ ec2_username }}"
-  register: eks_create
-  # Use async to prevent Ansible timeout during cluster creation
   async: 1800  # 30 minutes
   poll: 0
-  
+
 - name: Check EKS cluster creation status
-  async_status:
-    jid: "{{ async_job_id }}"
-  register: job_result
-  # Remove async tracking if job is no longer valid
-  ignore_errors: yes
-  when: async_job_id is defined
-
-- name: Debug Async Job Status
-  debug:
-    var: job_result
-  when: job_result is defined
-
-- name: Alternative EKS Cluster Check
-  shell: |
-    aws eks describe-cluster --name {{ cluster_name }} --query 'cluster.status'
+  shell: eksctl get cluster --name cloudmart --region {{ aws_region | default('us-east-1') }} || echo "Cluster creation in progress"
   register: cluster_status
-  changed_when: false
+  until: "'cloudmart' in cluster_status.stdout"
+  retries: 10
+  delay: 60
   ignore_errors: yes
 
-- name: Print Cluster Status
-  debug:
-    var: cluster_status.stdout
-  
 - name: Update kubectl configuration
-  shell: aws eks update-kubeconfig --name cloudmart --region {{ aws_region }}
-  args:
-    executable: /bin/bash
-  become_user: "{{ ec2_username }}"
+  shell: aws eks update-kubeconfig --name cloudmart --region {{ aws_region | default('us-east-1') }}
   register: kubeconfig_update
+  ignore_errors: yes
+  failed_when: false
   
 - name: Associate IAM OIDC Provider with EKS Cluster
   shell: |
