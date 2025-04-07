@@ -69,6 +69,15 @@
         line: 'export PATH=$PATH:$HOME/bin'
         state: present
         
+    - name: Fix kubeconfig API version
+      replace:
+        path: /home/{{ ec2_username }}/.kube/config
+        regexp: 'apiVersion: client.authentication.k8s.io/v1beta1'
+        replace: 'apiVersion: client.authentication.k8s.io/v1alpha1'
+      become: yes
+      become_user: "{{ ec2_username }}"
+      ignore_errors: yes  # In case the file doesn't exist yet
+        
     - name: Verify kubectl installation
       command: /home/ec2-user/bin/kubectl version --short --client
       register: kubectl_version
