@@ -88,6 +88,34 @@
         dest: "{{ log_dir }}/kubectl_install_{{ ansible_date_time.date }}.txt"
         content: "{{ kubectl_version.stdout }}"
 
+- name: Install AWS IAM Authenticator
+  block:
+    - name: Download AWS IAM Authenticator
+      get_url:
+        url: "https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.6.2/aws-iam-authenticator_0.6.2_linux_amd64"
+        dest: /tmp/aws-iam-authenticator
+        mode: '0755'
+        
+    - name: Move AWS IAM Authenticator to bin directory
+      copy:
+        src: /tmp/aws-iam-authenticator
+        dest: /home/ec2-user/bin/aws-iam-authenticator
+        owner: "{{ ec2_username }}"
+        group: "{{ ec2_username }}"
+        mode: '0755'
+        remote_src: yes
+        
+    - name: Verify AWS IAM Authenticator installation
+      command: /home/ec2-user/bin/aws-iam-authenticator version
+      register: authenticator_version
+      changed_when: false
+      become_user: "{{ ec2_username }}"
+      
+    - name: Log AWS IAM Authenticator installation
+      copy:
+        dest: "{{ log_dir }}/aws_iam_authenticator_install_{{ ansible_date_time.date }}.txt"
+        content: "{{ authenticator_version.stdout }}"
+        
 - name: Authenticate with ECR
   shell: |
     # Get your AWS account ID
