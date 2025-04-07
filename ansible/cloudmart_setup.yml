@@ -72,7 +72,16 @@
         owner: "{{ ec2_username }}"
         group: "{{ ec2_username }}"
         mode: '0644'
-      
+        
+    - name: Create setup-complete log file with proper permissions
+      file:
+        path: /home/ec2-user/setup-complete.log
+        state: touch
+        owner: ec2-user
+        group: ec2-user
+        mode: '0644'
+      become: yes  # Run as root to create the file
+
     - name: Final status check
       shell: |
         echo "Setup completed at $(date)" > /home/ec2-user/setup-complete.log
@@ -80,11 +89,12 @@
         docker ps >> /home/ec2-user/setup-complete.log
         echo "Kubernetes status:" >> /home/ec2-user/setup-complete.log
         kubectl get pods >> /home/ec2-user/setup-complete.log
+        kubectl get svc >> /home/ec2-user/setup-complete.log
       args:
         executable: /bin/bash
-      register: final_status
-      become_user: "{{ ec2_username }}"
-      
+      become: yes
+      become_user: ec2-user  # Run as ec2-user to ensure proper access to kubectl  
+        
     - name: Archive log files
       archive:
         path: "{{ log_dir }}"
