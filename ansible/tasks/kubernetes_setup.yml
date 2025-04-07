@@ -148,14 +148,20 @@
   register: backend_push
   
 - name: Tag and push frontend image to ECR
-  docker_image:
-    name: "{{ frontend_image_name }}"
-    repository: "{{ frontend_ecr_repo }}"
-    tag: "{{ frontend_image_tag }}"
-    push: yes
-  vars:
-    frontend_ecr_repo: "{{ hostvars[inventory_hostname].frontend_ecr_repo | default('') }}"
-  when: frontend_ecr_repo is defined and frontend_ecr_repo != ''
+  shell: |
+    # Get your AWS account ID
+    AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+    # Define region
+    AWS_REGION={{ aws_region | default('us-east-1') }}
+    # Define ECR repository URL
+    FRONTEND_ECR_REPO="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/cloudmart-frontend"
+    # Tag and push
+    docker tag cloudmart-frontend:latest ${FRONTEND_ECR_REPO}:latest
+    docker push ${FRONTEND_ECR_REPO}:latest
+  args:
+    executable: /bin/bash
+  become_user: "{{ ec2_username | default('ec2-user') }}"
+  register: frontend_push
 
 - name: Create k8s directory
   file:
