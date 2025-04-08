@@ -1,6 +1,15 @@
 ---
 # deployment.yml - Tasks for creating and deploying to the EKS cluster
 
+- name: Wait for DynamoDB table to be active
+  shell: |
+    aws dynamodb describe-table --table-name {{ dynamodb_table_name }} --region {{ aws_region }} --query 'Table.TableStatus' | grep ACTIVE || echo "Table not ready"
+  register: dynamodb_status
+  until: "'ACTIVE' in dynamodb_status.stdout"
+  retries: 15
+  delay: 10
+  ignore_errors: yes
+
 - name: Create EKS cluster (this will take ~15 minutes)
   shell: |
     eksctl create cluster \
