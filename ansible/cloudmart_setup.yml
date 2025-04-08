@@ -11,6 +11,10 @@
     instance_id: "unknown"
     public_ip: "{{ ansible_host }}"
     ec2_username: "ec2-user"
+    # Add these missing variables
+    dynamodb_table_name: "cloudmart-products"  
+    cluster_name: "cloudmart"
+    async_job_id: ""  # Initialize to empty string
     
   pre_tasks:
     - name: Wait for system to become reachable
@@ -36,7 +40,6 @@
         state: directory
         mode: '0755'
       become: yes
-
     - name: Create master log file with system information
       copy:
         dest: "{{ log_dir }}/master_{{ ansible_date_time.date }}.txt"
@@ -81,7 +84,6 @@
         group: ec2-user
         mode: '0644'
       become: yes  # Run as root to create the file
-
     - name: Final status check
       shell: |
         echo "Setup completed at $(date)" > /home/ec2-user/setup-complete.log
