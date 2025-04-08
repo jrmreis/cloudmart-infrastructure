@@ -1,6 +1,7 @@
 # cloudmart-infrastructure - Homol
 
 on Ec2: ansible-playbook ansible/cloudmart_setup.yml -i 'localhost,' --connection=local -vvv
+        ansible-playbook ansible/playbooks/main.yml -i 'localhost,' --connection=local -vvv
 
 
 # Check pod logs
