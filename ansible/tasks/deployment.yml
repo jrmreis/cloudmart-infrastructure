@@ -24,15 +24,16 @@
   changed_when: false
   ignore_errors: yes
 
-- name: Create EKS cluster (this will take ~15 minutes)
+- name: Create EKS cluster with nodegroup (this will take ~15 minutes)
   shell: |
     eksctl create cluster \
       --name {{ cluster_name }} \
       --region {{ aws_region }} \
       --nodegroup-name standard-workers \
       --node-type t3.medium \
-      --nodes 1 \
-      --with-oidc \
+      --nodes 2 \
+      --nodes-min 1 \
+      --nodes-max 3 \
       --managed
   args:
     executable: /bin/bash
