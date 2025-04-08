@@ -1,0 +1,70 @@
+# Update main.yml with proper sequencing
+---
+# CloudMart Infrastructure Deployment
+# Ensure proper sequencing of playbooks
+
+- name: Setup prerequisites on all nodes
+  import_playbook: prerequisites.yml
+  tags: [prerequisites]
+
+- name: Configure control plane nodes
+  import_playbook: setup-master.yml
+  tags: [kubernetes, master]
+
+# Important: Add explicit wait between control plane and network setup
+- name: Verify control plane is fully initialized
+  hosts: master
+  gather_facts: no
+  tasks:
+    - name: Wait for API server to be fully available
+      uri:
+        url: "https://{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}:6443/healthz"
+        validate_certs: no
+        return_content: yes
+      register: api_health
+      until: api_health.status == 200
+      retries: 30
+      delay: 10
+  tags: [kubernetes, master, verification]
+
+- name: Configure kubernetes networking
+  import_playbook: networking.yml
+  tags: [kubernetes, networking]
+
+# Important: Add explicit wait between networking and worker nodes
+- name: Verify network components are running
+  hosts: master
+  gather_facts: no
+  tasks:
+    - name: Wait for CoreDNS to be ready
+      shell: kubectl get pods -n kube-system -l k8s-app=kube-dns -o jsonpath='{.items[*].status.phase}' | grep -v Running || echo "CoreDNS Ready"
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: coredns_status
+      until: "'CoreDNS Ready' in coredns_status.stdout or 'Running' in coredns_status.stdout"
+      retries: 30
+      delay: 10
+  tags: [kubernetes, networking, verification]
+
+- name: Configure worker nodes
+  import_playbook: setup-workers.yml
+  tags: [kubernetes, workers]
+
+# Important: Add explicit wait for all nodes to be ready
+- name: Verify all nodes are ready
+  hosts: master
+  gather_facts: no
+  tasks:
+    - name: Check if all nodes are ready
+      shell: kubectl get nodes | grep NotReady || echo "All nodes ready"
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: nodes_status
+      until: "'All nodes ready' in nodes_status.stdout"
+      retries: 20
+      delay: 15
+  tags: [kubernetes, verification]
+
+- name: Deploy applications
+  import_playbook: deploy-apps.yml
+  tags: [applications]

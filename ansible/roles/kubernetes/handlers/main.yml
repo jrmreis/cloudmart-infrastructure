@@ -1,0 +1,67 @@
+---
+# Kubernetes handlers with proper sequencing and wait conditions
+
+- name: reset kubeadm
+  command: kubeadm reset -f
+  ignore_errors: yes
+
+- name: setup admin kubeconfig
+  block:
+    - name: Create .kube directory for current user
+      file:
+        path: "{{ ansible_env.HOME }}/.kube"
+        state: directory
+        mode: '0755'
+      
+    - name: Copy admin.conf to user's kube config
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: "{{ ansible_env.HOME }}/.kube/config"
+        remote_src: yes
+        mode: '0600'
+      
+    - name: Wait for kubeconfig to be accessible
+      wait_for:
+        path: "{{ ansible_env.HOME }}/.kube/config"
+        state: present
+        timeout: 30
+
+- name: apply network plugin
+  block:
+    - name: Wait for API server to be ready before applying network plugin
+      uri:
+        url: "https://{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}:6443/healthz"
+        validate_certs: no
+        return_content: yes
+      register: api_health
+      until: api_health.status == 200
+      retries: 30
+      delay: 10
+    
+    - name: Apply network plugin manifest
+      command: >
+        kubectl apply -f {{ network_plugin_manifest }}
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+    
+    - name: Wait for network plugin pods to be running
+      shell: >
+        kubectl get pods --all-namespaces -l k8s-app=calico-node -o jsonpath='{.items[*].status.phase}' | 
+        grep -v Running || echo "Network Ready"
+      register: network_pods_status
+      until: "'Network Ready' in network_pods_status.stdout or 'Running' in network_pods_status.stdout"
+      retries: 30
+      delay: 10
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: wait for coredns
+  shell: >
+    kubectl get pods --all-namespaces -l k8s-app=kube-dns -o jsonpath='{.items[*].status.phase}' | 
+    grep -v Running || echo "CoreDNS Ready"
+  register: coredns_status
+  until: "'CoreDNS Ready' in coredns_status.stdout or 'Running' in coredns_status.stdout"
+  retries: 30
+  delay: 10
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf

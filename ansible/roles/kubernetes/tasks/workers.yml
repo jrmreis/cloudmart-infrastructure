@@ -1,0 +1,20 @@
+# Add these tasks to workers.yml
+- name: Check if control plane is ready
+  uri:
+    url: "https://{{ control_plane_ip }}:6443/healthz"
+    validate_certs: no
+    return_content: yes
+  register: api_health
+  until: api_health.status == 200
+  retries: 30
+  delay: 10
+  delegate_to: localhost
+
+- name: Check if node is already joined
+  stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: node_joined
+
+- name: Join worker node to cluster
+  command: "{{ hostvars['control_plane']['join_command'] }}"
+  when: api_health.status == 200 and not node_joined.stat.exists

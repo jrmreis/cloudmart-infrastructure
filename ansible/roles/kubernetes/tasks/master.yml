@@ -1,0 +1,13 @@
+# Add this task before any application deployment
+- name: Verify cluster readiness
+  shell: |
+    kubectl get nodes | grep NotReady || echo "Nodes Ready" 
+    kubectl get pods --all-namespaces | grep -v Running | grep -v Completed || echo "Pods Running"
+  register: cluster_status
+  until: 
+    - "'Nodes Ready' in cluster_status.stdout" 
+    - "'Pods Running' in cluster_status.stdout"
+  retries: 15
+  delay: 10
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf

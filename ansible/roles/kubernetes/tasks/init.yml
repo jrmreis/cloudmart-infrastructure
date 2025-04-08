@@ -1,0 +1,19 @@
+# Add these tasks to init.yml
+- name: Check if kubeadm has already run
+  stat:
+    path: /etc/kubernetes/admin.conf
+  register: kubeadm_initialized
+
+- name: Initialize Kubernetes control plane
+  command: kubeadm init --pod-network-cidr=10.244.0.0/16
+  when: not kubeadm_initialized.stat.exists
+  register: kubeadm_init
+
+- name: Wait for Kubernetes API Server
+  wait_for:
+    host: "{{ kubernetes_api_address | default('localhost') }}"
+    port: 6443
+    state: started
+    timeout: 300
+  register: api_server_ready
+  when: kubeadm_init is changed or kubeadm_initialized.stat.exists

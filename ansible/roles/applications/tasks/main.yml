@@ -1,0 +1,77 @@
+---
+# Application deployment tasks
+# Ensure cluster is fully ready before deploying applications
+
+- name: Verify Kubernetes cluster readiness
+  shell: |
+    # Check if all nodes are Ready
+    kubectl get nodes | grep NotReady || echo "Nodes Ready"
+    
+    # Check if all system pods are Running
+    kubectl get pods --all-namespaces --field-selector status.phase!=Running,status.phase!=Succeeded | grep -v NAME || echo "System Pods Ready"
+    
+    # Check if CoreDNS is functioning
+    kubectl get pods -n kube-system -l k8s-app=kube-dns -o jsonpath='{.items[*].status.phase}' | grep -v Running || echo "CoreDNS Ready"
+    
+    # Check if network plugin is functioning
+    kubectl get pods -n kube-system -l k8s-app=calico-node -o jsonpath='{.items[*].status.phase}' | grep -v Running || echo "Network Ready"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: cluster_status
+  until: 
+    - "'Nodes Ready' in cluster_status.stdout"
+    - "'System Pods Ready' in cluster_status.stdout"
+    - "'CoreDNS Ready' in cluster_status.stdout or 'Running' in cluster_status.stdout"
+    - "'Network Ready' in cluster_status.stdout or 'Running' in cluster_status.stdout"
+  retries: 20
+  delay: 15
+  delegate_to: "{{ groups['master'][0] }}"
+  run_once: true
+
+- name: Create namespaces for applications
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ item }}"
+  loop:
+    - cloudmart-frontend
+    - cloudmart-backend
+    - cloudmart-database
+  delegate_to: "{{ groups['master'][0] }}"
+  run_once: true
+
+- name: Deploy backend services
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ playbook_dir }}/../templates/backend-deployment.yml.j2"
+  delegate_to: "{{ groups['master'][0] }}"
+  run_once: true
+
+# Add wait condition for backend to be ready before frontend deployment
+- name: Wait for backend services to be ready
+  shell: kubectl get pods -n cloudmart-backend | grep -v Running || echo "Backend Ready"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: backend_status
+  until: "'Backend Ready' in backend_status.stdout"
+  retries: 20
+  delay: 15
+  delegate_to: "{{ groups['master'][0] }}"
+  run_once: true
+
+- name: Deploy frontend services
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ playbook_dir }}/../templates/frontend-deployment.yml.j2"
+  delegate_to: "{{ groups['master'][0] }}"
+  run_once: true
+
+- name: Deploy ingress resources
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ playbook_dir }}/../templates/ingress.yml.j2"
+  delegate_to: "{{ groups['master'][0] }}"
+  run_once: true

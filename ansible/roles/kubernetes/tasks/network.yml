@@ -1,0 +1,26 @@
+# Add these tasks to network.yml
+- name: Check if API server is ready before applying network plugin
+  uri:
+    url: "https://{{ kubernetes_api_address | default('localhost') }}:6443/healthz"
+    validate_certs: no
+    return_content: yes
+  register: api_health
+  until: api_health.status == 200
+  retries: 30
+  delay: 10
+  
+- name: Apply pod network plugin
+  command: kubectl apply -f "{{ network_plugin_manifest }}"
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  register: network_applied
+  when: api_health.status == 200
+  
+- name: Wait for network pods to be running
+  shell: kubectl get pods --all-namespaces -l k8s-app=calico-node -o jsonpath='{.items[*].status.phase}' | grep -v Running || echo "Success"
+  register: network_pods_status
+  until: "'Success' in network_pods_status.stdout"
+  retries: 30
+  delay: 10
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf

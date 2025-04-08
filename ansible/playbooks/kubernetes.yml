@@ -1,0 +1,87 @@
+---
+# Main Kubernetes deployment playbook
+# Updated with wait conditions between phases
+
+- name: Configure Kubernetes control plane
+  hosts: master
+  become: true
+  roles:
+    - role: kubernetes/common
+    - role: kubernetes/master
+
+- name: Verify control plane is ready
+  hosts: master
+  gather_facts: no
+  become: true
+  tasks:
+    - name: Wait for API server to be fully available
+      uri:
+        url: "https://{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}:6443/healthz"
+        validate_certs: no
+        return_content: yes
+      register: api_health
+      until: api_health.status == 200
+      retries: 30
+      delay: 10
+
+    - name: Wait for etcd to be healthy
+      shell: kubectl get --raw=/healthz/etcd
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: etcd_health
+      until: etcd_health.stdout == "ok"
+      retries: 30
+      delay: 10
+
+- name: Configure Kubernetes networking
+  hosts: master
+  become: true
+  roles:
+    - role: kubernetes/network
+
+- name: Verify network components are running
+  hosts: master
+  gather_facts: no
+  become: true
+  tasks:
+    - name: Verify CoreDNS and network pods are running
+      shell: |
+        # Check CoreDNS
+        kubectl get pods -n kube-system -l k8s-app=kube-dns -o jsonpath='{.items[*].status.phase}' | grep -v Running || echo "CoreDNS OK"
+        # Check network plugin (adjust label selector based on your network plugin)
+        kubectl get pods -n kube-system -l k8s-app=calico-node -o jsonpath='{.items[*].status.phase}' | grep -v Running || echo "Network OK"
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: network_status
+      until: 
+        - "'CoreDNS OK' in network_status.stdout or 'Running' in network_status.stdout"
+        - "'Network OK' in network_status.stdout or 'Running' in network_status.stdout"
+      retries: 30
+      delay: 10
+
+- name: Configure Kubernetes worker nodes
+  hosts: workers
+  become: true
+  roles:
+    - role: kubernetes/common
+    - role: kubernetes/worker
+
+- name: Verify all nodes are ready
+  hosts: master
+  gather_facts: no
+  become: true
+  tasks:
+    - name: Get node status
+      shell: kubectl get nodes
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: node_status
+      
+    - name: Wait for all nodes to be ready
+      shell: kubectl get nodes | grep NotReady || echo "All nodes ready"
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: nodes_ready
+      until: "'All nodes ready' in nodes_ready.stdout"
+      retries: 30
+      delay: 10
