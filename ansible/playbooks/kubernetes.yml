@@ -1,87 +1,200 @@
 ---
-# Main Kubernetes deployment playbook
-# Updated with wait conditions between phases
+# Main Kubernetes deployment playbook for EKS
+# Updated with wait conditions between phases for AWS managed Kubernetes
 
-- name: Configure Kubernetes control plane
-  hosts: master
-  become: true
-  roles:
-    - role: kubernetes/common
-    - role: kubernetes/master
-
-- name: Verify control plane is ready
-  hosts: master
-  gather_facts: no
-  become: true
+- name: Configure EKS control plane
+  hosts: localhost
+  connection: local
+  gather_facts: yes
   tasks:
-    - name: Wait for API server to be fully available
-      uri:
-        url: "https://{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}:6443/healthz"
-        validate_certs: no
-        return_content: yes
-      register: api_health
-      until: api_health.status == 200
-      retries: 30
-      delay: 10
-
-    - name: Wait for etcd to be healthy
-      shell: kubectl get --raw=/healthz/etcd
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      register: etcd_health
-      until: etcd_health.stdout == "ok"
-      retries: 30
-      delay: 10
-
-- name: Configure Kubernetes networking
-  hosts: master
-  become: true
-  roles:
-    - role: kubernetes/network
-
-- name: Verify network components are running
-  hosts: master
-  gather_facts: no
-  become: true
-  tasks:
-    - name: Verify CoreDNS and network pods are running
+    - name: Check if EKS cluster exists
       shell: |
-        # Check CoreDNS
-        kubectl get pods -n kube-system -l k8s-app=kube-dns -o jsonpath='{.items[*].status.phase}' | grep -v Running || echo "CoreDNS OK"
-        # Check network plugin (adjust label selector based on your network plugin)
-        kubectl get pods -n kube-system -l k8s-app=calico-node -o jsonpath='{.items[*].status.phase}' | grep -v Running || echo "Network OK"
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      register: network_status
-      until: 
-        - "'CoreDNS OK' in network_status.stdout or 'Running' in network_status.stdout"
-        - "'Network OK' in network_status.stdout or 'Running' in network_status.stdout"
+        aws eks list-clusters --region {{ aws_region }} | grep {{ cluster_name }} || echo "Cluster not found"
+      register: cluster_exists
+      changed_when: false
+      ignore_errors: yes
+      
+    - name: Create EKS cluster with nodegroup
+      shell: |
+        eksctl create cluster \
+          --name {{ cluster_name }} \
+          --region {{ aws_region }} \
+          --nodegroup-name standard-workers \
+          --node-type t3.medium \
+          --nodes 2 \
+          --nodes-min 1 \
+          --nodes-max 3 \
+          --managed
+      args:
+        executable: /bin/bash
+        chdir: "/home/{{ ec2_username }}/k8s"
+      become_user: "{{ ec2_username }}"
+      register: eks_create
+      async: 1800  # 30 minutes
+      poll: 0
+      when: "'Cluster not found' in cluster_exists.stdout"
+      
+    # Save the async job ID to a variable that won't get lost
+    - name: Save async job ID
+      set_fact:
+        async_job_id: "{{ eks_create.ansible_job_id }}"
+      when: eks_create is defined and eks_create.ansible_job_id is defined
+
+- name: Verify EKS control plane is ready
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  tasks:
+    - name: Check EKS cluster creation status
+      async_status:
+        jid: "{{ async_job_id | default('') }}"
+      register: job_result
+      until: job_result.finished | default(false)
+      retries: 60
+      delay: 30
+      # Remove async tracking if job is no longer valid
+      ignore_errors: yes
+      when: async_job_id is defined and async_job_id != ""
+
+    - name: Wait for EKS cluster to exist
+      shell: |
+        aws eks list-clusters --region {{ aws_region }} | grep {{ cluster_name }} || echo "Cluster not found"
+      register: cluster_exists_check
+      until: cluster_name in cluster_exists_check.stdout
+      retries: 30
+      delay: 20
+      ignore_errors: yes
+
+    # Wait even if previous check passes since the cluster might exist but not be ACTIVE
+    - name: Wait for EKS cluster to be active
+      shell: |
+        aws eks describe-cluster --name {{ cluster_name }} --region {{ aws_region }} --query 'cluster.status' || echo "CREATING"
+      register: cluster_status
+      until: "'ACTIVE' in cluster_status.stdout"
+      retries: 30
+      delay: 20
+      ignore_errors: yes
+      
+    - name: Update kubectl configuration
+      shell: aws eks update-kubeconfig --name {{ cluster_name }} --region {{ aws_region }}
+      args:
+        executable: /bin/bash
+      register: kubeconfig_update
+      ignore_errors: yes
+      
+    - name: Get EKS API endpoint
+      shell: |
+        aws eks describe-cluster --name {{ cluster_name }} --region {{ aws_region }} --query 'cluster.endpoint' --output text
+      register: eks_endpoint
+      when: cluster_status.stdout is defined and 'ACTIVE' in cluster_status.stdout
+      
+    - name: Wait for API server to be fully available
+      shell: |
+        kubectl get --raw /healthz
+      register: api_status
+      until: api_status.rc == 0
       retries: 30
       delay: 10
+      ignore_errors: yes
 
-- name: Configure Kubernetes worker nodes
-  hosts: workers
-  become: true
-  roles:
-    - role: kubernetes/common
-    - role: kubernetes/worker
-
-- name: Verify all nodes are ready
-  hosts: master
+- name: Configure EKS Networking
+  hosts: localhost
+  connection: local
   gather_facts: no
-  become: true
   tasks:
-    - name: Get node status
-      shell: kubectl get nodes
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
-      register: node_status
+    - name: Associate IAM OIDC Provider with EKS Cluster
+      shell: |
+        eksctl utils associate-iam-oidc-provider \
+          --region={{ aws_region }} \
+          --cluster={{ cluster_name }} \
+          --approve
+      register: oidc_association
+      changed_when: "'associated' in oidc_association.stdout"
+      failed_when: false
+      ignore_errors: yes
+
+    # Add crucial pause for OIDC provider association to propagate
+    - name: Allow time for OIDC provider association to propagate
+      pause:
+        seconds: 45
+      when: oidc_association is defined and not oidc_association.failed
+
+    - name: Create IAM Service Account for CloudMart Pods
+      shell: |
+        eksctl create iamserviceaccount \
+          --cluster={{ cluster_name }} \
+          --name=cloudmart-pod-execution-role \
+          --role-name=CloudMartPodExecutionRole \
+          --attach-policy-arn=arn:aws:iam::aws:policy/AdministratorAccess \
+          --region={{ aws_region }} \
+          --approve
+      register: service_account_creation
+      changed_when: "'created' in service_account_creation.stdout"
+      failed_when: false
+      ignore_errors: yes
+
+    # Add critical pause for IAM role propagation
+    - name: Allow time for IAM role propagation
+      pause:
+        seconds: 60
+      when: service_account_creation is defined and not service_account_creation.failed
+
+- name: Verify Networking Components
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  tasks:    
+    # Create ECR repositories if they don't exist
+    - name: Create ECR repository for backend if it doesn't exist
+      shell: |
+        aws ecr describe-repositories --repository-names cloudmart-backend --region {{ aws_region }} || \
+        aws ecr create-repository --repository-name cloudmart-backend --region {{ aws_region }}
+      ignore_errors: yes
+
+    - name: Create ECR repository for frontend if it doesn't exist
+      shell: |
+        aws ecr describe-repositories --repository-names cloudmart-frontend --region {{ aws_region }} || \
+        aws ecr create-repository --repository-name cloudmart-frontend --region {{ aws_region }}
+      ignore_errors: yes
       
-    - name: Wait for all nodes to be ready
-      shell: kubectl get nodes | grep NotReady || echo "All nodes ready"
-      environment:
-        KUBECONFIG: /etc/kubernetes/admin.conf
+    - name: Wait for CoreDNS to be ready
+      shell: |
+        kubectl get pods -n kube-system -l k8s-app=kube-dns -o jsonpath='{.items[*].status.phase}' | grep -v Running || echo "CoreDNS Ready"
+      register: coredns_status
+      until: "'CoreDNS Ready' in coredns_status.stdout or 'Running' in coredns_status.stdout"
+      retries: 30
+      delay: 10
+      ignore_errors: yes
+
+- name: Verify Node Readiness
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  tasks:
+    - name: Wait for EKS nodegroup to be active
+      shell: |
+        aws eks list-nodegroups --cluster-name {{ cluster_name }} --region {{ aws_region }} | grep standard-workers || echo "No nodegroups found"
+      register: nodegroup_exists
+      until: "'standard-workers' in nodegroup_exists.stdout"
+      retries: 20
+      delay: 15
+      ignore_errors: yes
+      
+    - name: Wait for nodes to join and be ready
+      shell: |
+        kubectl get nodes | grep NotReady || echo "All nodes ready"
       register: nodes_ready
       until: "'All nodes ready' in nodes_ready.stdout"
       retries: 30
       delay: 10
+      ignore_errors: yes
+      
+    - name: Get node details
+      shell: kubectl get nodes
+      register: node_status
+      ignore_errors: yes
+      
+    - name: Display node status
+      debug:
+        var: node_status.stdout_lines
+      when: node_status.stdout is defined
