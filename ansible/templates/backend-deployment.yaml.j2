@@ -47,6 +47,7 @@ spec:
         projected:
           sources:
           - serviceAccountToken:
+              path: token
               expirationSeconds: 86400
 ---
 apiVersion: v1
