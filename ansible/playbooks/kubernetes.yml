@@ -6,6 +6,11 @@
   hosts: localhost
   connection: local
   gather_facts: yes
+  vars:
+    cluster_name: "cloudmart"
+    aws_region: "us-east-1"
+    dynamodb_table_name: "cloudmart-products"
+    ec2_username: "ec2-user"
   tasks:
     - name: Check if EKS cluster exists
       shell: |
@@ -44,6 +49,9 @@
   hosts: localhost
   connection: local
   gather_facts: no
+  vars:
+    cluster_name: "cloudmart"
+    aws_region: "us-east-1"
   tasks:
     - name: Check EKS cluster creation status
       async_status:
@@ -97,66 +105,13 @@
       delay: 10
       ignore_errors: yes
 
-- name: Configure EKS Networking
-  hosts: localhost
-  connection: local
-  gather_facts: no
-  tasks:
-    - name: Associate IAM OIDC Provider with EKS Cluster
-      shell: |
-        eksctl utils associate-iam-oidc-provider \
-          --region={{ aws_region }} \
-          --cluster={{ cluster_name }} \
-          --approve
-      register: oidc_association
-      changed_when: "'associated' in oidc_association.stdout"
-      failed_when: false
-      ignore_errors: yes
-
-    # Add crucial pause for OIDC provider association to propagate
-    - name: Allow time for OIDC provider association to propagate
-      pause:
-        seconds: 45
-      when: oidc_association is defined and not oidc_association.failed
-
-    - name: Create IAM Service Account for CloudMart Pods
-      shell: |
-        eksctl create iamserviceaccount \
-          --cluster={{ cluster_name }} \
-          --name=cloudmart-pod-execution-role \
-          --role-name=CloudMartPodExecutionRole \
-          --attach-policy-arn=arn:aws:iam::aws:policy/AdministratorAccess \
-          --region={{ aws_region }} \
-          --approve
-      register: service_account_creation
-      changed_when: "'created' in service_account_creation.stdout"
-      failed_when: false
-      ignore_errors: yes
-
-    # Add critical pause for IAM role propagation
-    - name: Allow time for IAM role propagation
-      pause:
-        seconds: 60
-      when: service_account_creation is defined and not service_account_creation.failed
-
 - name: Verify Networking Components
   hosts: localhost
   connection: local
   gather_facts: no
+  vars:
+    aws_region: "us-east-1"
   tasks:    
-    # Create ECR repositories if they don't exist
-    - name: Create ECR repository for backend if it doesn't exist
-      shell: |
-        aws ecr describe-repositories --repository-names cloudmart-backend --region {{ aws_region }} || \
-        aws ecr create-repository --repository-name cloudmart-backend --region {{ aws_region }}
-      ignore_errors: yes
-
-    - name: Create ECR repository for frontend if it doesn't exist
-      shell: |
-        aws ecr describe-repositories --repository-names cloudmart-frontend --region {{ aws_region }} || \
-        aws ecr create-repository --repository-name cloudmart-frontend --region {{ aws_region }}
-      ignore_errors: yes
-      
     - name: Wait for CoreDNS to be ready
       shell: |
         kubectl get pods -n kube-system -l k8s-app=kube-dns -o jsonpath='{.items[*].status.phase}' | grep -v Running || echo "CoreDNS Ready"
@@ -170,6 +125,9 @@
   hosts: localhost
   connection: local
   gather_facts: no
+  vars:
+    cluster_name: "cloudmart"
+    aws_region: "us-east-1"
   tasks:
     - name: Wait for EKS nodegroup to be active
       shell: |
@@ -198,3 +156,102 @@
       debug:
         var: node_status.stdout_lines
       when: node_status.stdout is defined
+
+- name: Deploy CloudMart Applications
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars:
+    aws_region: "us-east-1"
+    ec2_username: "ec2-user"
+  tasks:
+    - name: Create deployment directory
+      file:
+        path: "/home/{{ ec2_username }}/k8s"
+        state: directory
+        mode: '0755'
+        owner: "{{ ec2_username }}"
+        group: "{{ ec2_username }}"
+      
+    - name: Create backend deployment file
+      template:
+        src: templates/backend-deployment.yaml.j2
+        dest: "/home/{{ ec2_username }}/k8s/backend-deployment.yaml"
+        owner: "{{ ec2_username }}"
+        group: "{{ ec2_username }}"
+        mode: '0644'
+      
+    - name: Create frontend deployment file
+      template:
+        src: templates/frontend-deployment.yaml.j2
+        dest: "/home/{{ ec2_username }}/k8s/frontend-deployment.yaml"
+        owner: "{{ ec2_username }}"
+        group: "{{ ec2_username }}"
+        mode: '0644'
+      
+    - name: Apply backend deployment
+      shell: kubectl apply -f /home/{{ ec2_username }}/k8s/backend-deployment.yaml
+      args:
+        executable: /bin/bash
+      register: backend_deployment
+      
+    # Add wait for backend deployment to be ready
+    - name: Wait for backend deployment to be ready
+      shell: |
+        kubectl wait --for=condition=available deployment/cloudmart-backend --timeout=120s || echo "Backend deployment not ready yet"
+      args:
+        executable: /bin/bash
+      register: backend_ready
+      retries: 5
+      delay: 15
+      until: backend_ready.rc == 0 or "Backend deployment not ready yet" in backend_ready.stdout
+      ignore_errors: yes
+      
+    - name: Apply frontend deployment
+      shell: kubectl apply -f /home/{{ ec2_username }}/k8s/frontend-deployment.yaml
+      args:
+        executable: /bin/bash
+      register: frontend_deployment
+      
+    - name: Wait for services to be provisioned (load balancers take time)
+      pause:
+        seconds: 60
+        prompt: "Waiting for Kubernetes services to be provisioned..."
+
+    # Add wait for all pods to be running
+    - name: Wait for all pods to be running
+      shell: |
+        kubectl get pods --no-headers | grep -v Running | grep -v Completed || echo "All pods running"
+      register: pods_status
+      until: "'All pods running' in pods_status.stdout"
+      retries: 10
+      delay: 15
+      args:
+        executable: /bin/bash
+      ignore_errors: yes
+      
+    - name: Get Kubernetes services status
+      shell: kubectl get services
+      args:
+        executable: /bin/bash
+      register: k8s_services
+      changed_when: false
+      
+    - name: Get Kubernetes pods status
+      shell: kubectl get pods
+      args:
+        executable: /bin/bash
+      register: k8s_pods
+      changed_when: false
+      
+    - name: Log Kubernetes deployments status
+      copy:
+        dest: "/home/{{ ec2_username }}/logs/kubernetes_deployment_{{ ansible_date_time.date }}.txt"
+        content: |
+          Backend Deployment: {{ backend_deployment.stdout | default('Not available') }}
+          Frontend Deployment: {{ frontend_deployment.stdout | default('Not available') }}
+          Kubernetes Services: {{ k8s_services.stdout | default('Not available') }}
+          Kubernetes Pods: {{ k8s_pods.stdout | default('Not available') }}
+        owner: "{{ ec2_username }}"
+        group: "{{ ec2_username }}"
+        mode: '0644'
