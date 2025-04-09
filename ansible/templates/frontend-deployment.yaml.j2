@@ -1,10 +1,9 @@
-{% set aws_account_id = lookup('pipe', 'aws sts get-caller-identity --query Account --output text') %}
-{% set aws_region = aws_region | default('us-east-1') %}
-{% set frontend_repo = aws_account_id + '.dkr.ecr.' + aws_region + '.amazonaws.com/cloudmart-frontend' %}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: cloudmart-frontend
+  labels:
+    app: cloudmart-frontend
 spec:
   replicas: 2
   selector:
@@ -17,19 +16,19 @@ spec:
     spec:
       containers:
       - name: cloudmart-frontend
-        image: {{ frontend_repo }}:latest
+        image: {{ lookup('env', 'AWS_ACCOUNT_ID') | default('445567090747') }}.dkr.ecr.{{ aws_region }}.amazonaws.com/cloudmart-frontend:latest
         ports:
         - containerPort: 5001
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
         env:
         - name: VITE_API_BASE_URL
           value: "http://cloudmart-backend-service/api"
-        resources:
-          limits:
-            cpu: "0.5"
-            memory: "512Mi"
-          requests:
-            cpu: "0.2"
-            memory: "256Mi"
 ---
 apiVersion: v1
 kind: Service
