@@ -1,294 +1,110 @@
 ---
-# Ansible playbook for deploying CloudMart applications to Kubernetes
-# Path: /home/joel/Downloads/cloudmart-infrastructure-homol (2)/cloudmart-infrastructure-homol/ansible/playbooks/main.yml
-
-- name: Deploy CloudMart applications to Kubernetes
-  hosts: localhost
-  connection: local
-  gather_facts: yes
-  
+# cloudmart_setup.yml - Main playbook for CloudMart workstation setup
+- name: Configure CloudMart Workstation
+  hosts: all
+  become: yes
   vars:
-    aws_region: us-east-1
-    backend_port: 5000
-    frontend_port: 5001
-    backend_image: "{{ lookup('env', 'AWS_ACCOUNT_ID') }}.dkr.ecr.{{ aws_region }}.amazonaws.com/cloudmart-backend:latest"
-    frontend_image: "{{ lookup('env', 'AWS_ACCOUNT_ID') }}.dkr.ecr.{{ aws_region }}.amazonaws.com/cloudmart-frontend:latest"
-    project_dir: "/home/ec2-user/cloudmart-infrastructure"
-    backend_dir: "{{ project_dir }}/challenge-day2/backend"
-    frontend_dir: "{{ project_dir }}/challenge-day2/frontend"
-  
-  tasks:
-    - name: Create Kubernetes namespace
-      kubernetes.core.k8s:
-        name: cloudmart
-        api_version: v1
-        kind: Namespace
-        state: present
-    
-    # Backend Environment Config
-    - name: Create backend environment file for Kubernetes
-      copy:
-        dest: "{{ backend_dir }}/.env_kube"
-        content: |
-          PORT=5000
-          AWS_REGION=us-east-1
-          BEDROCK_AGENT_ID=<seu-bedrock-agent-id>
-          BEDROCK_AGENT_ALIAS_ID=<seu-bedrock-agent-alias-id>
-          OPENAI_API_KEY=<sua-chave-api-openai>
-          OPENAI_ASSISTANT_ID=<seu-id-assistente-openai>
-        mode: 0600
-    
-    - name: Create Kubernetes ConfigMap for backend environment
-      kubernetes.core.k8s:
-        state: present
-        definition:
-          apiVersion: v1
-          kind: ConfigMap
-          metadata:
-            name: cloudmart-backend-config
-            namespace: cloudmart
-          data:
-            PORT: "5000"
-            AWS_REGION: "us-east-1"
-    
-    - name: Create Kubernetes Secret for backend sensitive environment variables
-      kubernetes.core.k8s:
-        state: present
-        definition:
-          apiVersion: v1
-          kind: Secret
-          metadata:
-            name: cloudmart-backend-secrets
-            namespace: cloudmart
-          type: Opaque
-          stringData:
-            BEDROCK_AGENT_ID: "<seu-bedrock-agent-id>"
-            BEDROCK_AGENT_ALIAS_ID: "<seu-bedrock-agent-alias-id>"
-            OPENAI_API_KEY: "<sua-chave-api-openai>"
-            OPENAI_ASSISTANT_ID: "<seu-id-assistente-openai>"
-    
-    # Frontend Environment Config
-    - name: Create frontend environment file for Kubernetes
-      copy:
-        dest: "{{ frontend_dir }}/.env_kube"
-        content: |
-          VITE_API_BASE_URL=http://cloudmart-backend-app-service:5000/api
-        mode: 0600
-    
-    - name: Create Kubernetes ConfigMap for frontend environment
-      kubernetes.core.k8s:
-        state: present
-        definition:
-          apiVersion: v1
-          kind: ConfigMap
-          metadata:
-            name: cloudmart-frontend-config
-            namespace: cloudmart
-          data:
-            VITE_API_BASE_URL: "http://cloudmart-backend-app-service:5000/api"
-    
-    # Backend Deployment
-    - name: Deploy backend to Kubernetes
-      kubernetes.core.k8s:
-        state: present
-        definition:
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: cloudmart-backend-app
-            namespace: cloudmart
-            labels:
-              app: cloudmart-backend-app
-              Environment: Development
-              Project: CloudMart
-          spec:
-            replicas: 1
-            selector:
-              matchLabels:
-                app: cloudmart-backend-app
-            template:
-              metadata:
-                labels:
-                  app: cloudmart-backend-app
-              spec:
-                containers:
-                - name: cloudmart-backend-app
-                  image: "{{ backend_image }}"
-                  imagePullPolicy: Always
-                  ports:
-                  - containerPort: 5000
-                  envFrom:
-                  - configMapRef:
-                      name: cloudmart-backend-config
-                  - secretRef:
-                      name: cloudmart-backend-secrets
-                  resources:
-                    requests:
-                      memory: "256Mi"
-                      cpu: "100m"
-                    limits:
-                      memory: "512Mi"
-                      cpu: "500m"
-                  readinessProbe:
-                    httpGet:
-                      path: /healthz
-                      port: 5000
-                    initialDelaySeconds: 10
-                    periodSeconds: 10
-                  livenessProbe:
-                    httpGet:
-                      path: /healthz
-                      port: 5000
-                    initialDelaySeconds: 20
-                    periodSeconds: 30
-    
-    # Backend Service
-    - name: Create Kubernetes Service for backend
-      kubernetes.core.k8s:
-        state: present
-        definition:
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: cloudmart-backend-app-service
-            namespace: cloudmart
-            labels:
-              app: cloudmart-backend-app
-          spec:
-            selector:
-              app: cloudmart-backend-app
-            ports:
-            - port: 5000
-              targetPort: 5000
-              protocol: TCP
-            type: ClusterIP
-    
-    # Frontend Deployment
-    - name: Deploy frontend to Kubernetes
-      kubernetes.core.k8s:
-        state: present
-        definition:
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: cloudmart-frontend-app
-            namespace: cloudmart
-            labels:
-              app: cloudmart-frontend-app
-              Environment: Development
-              Project: CloudMart
-          spec:
-            replicas: 1
-            selector:
-              matchLabels:
-                app: cloudmart-frontend-app
-            template:
-              metadata:
-                labels:
-                  app: cloudmart-frontend-app
-              spec:
-                containers:
-                - name: cloudmart-frontend-app
-                  image: "{{ frontend_image }}"
-                  imagePullPolicy: Always
-                  ports:
-                  - containerPort: 5001
-                  envFrom:
-                  - configMapRef:
-                      name: cloudmart-frontend-config
-                  resources:
-                    requests:
-                      memory: "128Mi"
-                      cpu: "100m"
-                    limits:
-                      memory: "256Mi"
-                      cpu: "300m"
-                  readinessProbe:
-                    httpGet:
-                      path: /
-                      port: 5001
-                    initialDelaySeconds: 10
-                    periodSeconds: 10
-                  livenessProbe:
-                    httpGet:
-                      path: /
-                      port: 5001
-                    initialDelaySeconds: 20
-                    periodSeconds: 30
-    
-    # Frontend Service
-    - name: Create Kubernetes Service for frontend
-      kubernetes.core.k8s:
-        state: present
-        definition:
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: cloudmart-frontend-app-service
-            namespace: cloudmart
-            labels:
-              app: cloudmart-frontend-app
-          spec:
-            selector:
-              app: cloudmart-frontend-app
-            ports:
-            - port: 80
-              targetPort: 5001
-              protocol: TCP
-            type: LoadBalancer
-    
-    # Build and Push Docker Images
-    - name: Build and push backend Docker image
-      block:
-        - name: Log in to Amazon ECR
-          shell: aws ecr get-login-password --region {{ aws_region }} | docker login --username AWS --password-stdin {{ lookup('env', 'AWS_ACCOUNT_ID') }}.dkr.ecr.{{ aws_region }}.amazonaws.com
+    log_dir: "/home/ec2-user/logs"
+    backend_ecr_repo: "{{ hostvars[inventory_hostname]['backend_ecr_repo'] }}"
+    frontend_ecr_repo: "{{ hostvars[inventory_hostname]['frontend_ecr_repo'] }}"
+    aws_region: "us-east-1"
+    instance_id: "unknown"
+    public_ip: "{{ ansible_host }}"
+    ec2_username: "ec2-user"
+    # Add these missing variables
+    dynamodb_table_name: "cloudmart-products"  
+    cluster_name: "cloudmart"
+    async_job_id: ""  # Initialize to empty string
+
+  pre_tasks:
+    - name: Wait for system to become reachable
+      wait_for_connection:
+        timeout: 300
         
-        - name: Build backend Docker image
-          shell: docker build -t {{ backend_image }} {{ backend_dir }}
+    - name: Gather EC2 facts
+      setup:
+        gather_subset: all
+        
+  tasks:
+    - name: Create logs directory
+      file:
+        path: "{{ log_dir }}"
+        state: directory
+        owner: "{{ ec2_username }}"
+        group: "{{ ec2_username }}"
+        mode: '0755'
+        
+    - name: Create logs directory
+      file:
+        path: /var/log/cloudmart
+        state: directory
+        mode: '0755'
+      become: yes
+    - name: Create master log file with system information
+      copy:
+        dest: "{{ log_dir }}/master_{{ ansible_date_time.date }}.txt"
+        content: |
+          ========== CLOUDMART SETUP LOG ==========
+          Started at: {{ ansible_date_time.iso8601 }}
+          Instance ID: {{ instance_id }}
+          Public IP: {{ public_ip }}
+          =========================================
           
-        - name: Push backend image to ECR
-          shell: docker push {{ backend_image }}
+    - name: Import system setup tasks
+      import_tasks: tasks/system_setup.yml
+    
+    - name: Import Docker setup tasks
+      import_tasks: tasks/docker_setup.yml
+    
+    - name: Import application setup tasks
+      import_tasks: tasks/application_setup.yml
       
-    - name: Build and push frontend Docker image
-      block:
-        - name: Build frontend Docker image
-          shell: docker build -t {{ frontend_image }} {{ frontend_dir }}
-          
-        - name: Push frontend image to ECR
-          shell: docker push {{ frontend_image }}
-    
-    # Verify deployment
-    - name: Wait for backend deployment to be ready
-      kubernetes.core.k8s_info:
-        api_version: apps/v1
-        kind: Deployment
-        name: cloudmart-backend-app
-        namespace: cloudmart
-      register: backend_deployment
-      until: backend_deployment.resources[0].status.readyReplicas is defined and backend_deployment.resources[0].status.readyReplicas == 1
-      retries: 30
-      delay: 10
-    
-    - name: Wait for frontend deployment to be ready
-      kubernetes.core.k8s_info:
-        api_version: apps/v1
-        kind: Deployment
-        name: cloudmart-frontend-app
-        namespace: cloudmart
-      register: frontend_deployment
-      until: frontend_deployment.resources[0].status.readyReplicas is defined and frontend_deployment.resources[0].status.readyReplicas == 1
-      retries: 30
-      delay: 10
-    
-    - name: Get frontend service information
-      kubernetes.core.k8s_info:
-        api_version: v1
-        kind: Service
-        name: cloudmart-frontend-app-service
-        namespace: cloudmart
-      register: frontend_service
-    
-    - name: Display frontend access URL
+    - name: Import Kubernetes setup tasks
+      import_tasks: tasks/kubernetes_setup.yml
+      
+    - name: Import deployment tasks
+      import_tasks: tasks/deployment.yml
+      
+    - name: Create utility scripts
+      import_tasks: tasks/utility_scripts.yml
+      
+    - name: Create user README
+      template:
+        src: "templates/README.md.j2"
+        dest: "/home/ec2-user/README.md"
+        owner: "{{ ec2_username }}"
+        group: "{{ ec2_username }}"
+        mode: '0644'
+        
+    - name: Create setup-complete log file with proper permissions
+      file:
+        path: /home/ec2-user/setup-complete.log
+        state: touch
+        owner: ec2-user
+        group: ec2-user
+        mode: '0644'
+      become: yes  # Run as root to create the file
+    - name: Final status check
+      shell: |
+        echo "Setup completed at $(date)" > /home/ec2-user/setup-complete.log
+        echo "Docker container status:" >> /home/ec2-user/setup-complete.log
+        docker ps >> /home/ec2-user/setup-complete.log
+        echo "Kubernetes status:" >> /home/ec2-user/setup-complete.log
+        kubectl get pods >> /home/ec2-user/setup-complete.log
+        kubectl get svc >> /home/ec2-user/setup-complete.log
+      args:
+        executable: /bin/bash
+      become: yes
+      become_user: ec2-user  # Run as ec2-user to ensure proper access to kubectl  
+        
+    - name: Archive log files
+      archive:
+        path: "{{ log_dir }}"
+        dest: "/home/ec2-user/logs-archive-{{ ansible_date_time.date }}.tar.gz"
+        owner: "{{ ec2_username }}"
+        group: "{{ ec2_username }}"
+        format: gz
+        
+    - name: Final completion message
       debug:
-        msg: "CloudMart Frontend will be available at: http://{{ frontend_service.resources[0].status.loadBalancer.ingress[0].hostname | default(frontend_service.resources[0].status.loadBalancer.ingress[0].ip) }}"
-      when: frontend_service.resources[0].status.loadBalancer.ingress is defined
+        msg: "CloudMart setup completed successfully! Connect via SSH: ssh {{ ec2_username }}@{{ public_ip }}"
