@@ -8,13 +8,13 @@ if [ -z "$(docker ps -q)" ]; then
   # Navigate to backend directory and build/run container
   cd challenge-day2/backend
   docker build -t cloudmart-backend .
-  docker run -d -p 5000:5000 --env-file .env cloudmart-backend
+  docker run -d -p 5000:5000 --env-file .env_kube cloudmart-backend
   
   # Navigate to frontend directory and build/run container
   cd ..
   cd frontend/
   docker build -t cloudmart-frontend .
-  docker run -d -p 5001:5001 cloudmart-frontend
+  docker run -d -p 5001:5001 --env-file .env_kube cloudmart-frontend
   
   # Return to original directory and check container status
   cd ..
