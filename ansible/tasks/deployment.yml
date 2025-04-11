@@ -3,7 +3,7 @@
 
 - name: Set default AWS variables if not defined
   set_fact:
-    dynamodb_table_name: "{{ dynamodb_table_name | default('cloudmart-products') }}"
+    dynamodb_table_name: "{{ dynamodb_table_name | default('CloudMartProducts') }}"
     aws_region: "{{ aws_region | default('us-east-1') }}"
     cluster_name: "{{ cluster_name | default('cloudmart') }}"
 
