@@ -105,6 +105,15 @@
     group: "{{ ec2_username }}"
     mode: '0644'
     
+- name: Create frontend .env_kube file
+  copy:
+    dest: /home/ec2-user/challenge-day2/frontend/.env_kube
+    content: |
+      VITE_API_BASE_URL=http://{{ public_ip }}:5000/api
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0644'
+    
 - name: Create frontend Dockerfile
   copy:
     dest: /home/ec2-user/challenge-day2/frontend/Dockerfile
