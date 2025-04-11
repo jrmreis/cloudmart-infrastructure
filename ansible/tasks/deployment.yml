@@ -7,6 +7,41 @@
     aws_region: "{{ aws_region | default('us-east-1') }}"
     cluster_name: "{{ cluster_name | default('cloudmart') }}"
 
+- name: Create IAM policy for DynamoDB access
+  shell: |
+    aws iam create-policy \
+      --policy-name EKSNodeDynamoDBPolicy \
+      --policy-document '{
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "dynamodb:Scan",
+              "dynamodb:GetItem",
+              "dynamodb:PutItem",
+              "dynamodb:UpdateItem", 
+              "dynamodb:DeleteItem",
+              "dynamodb:Query"
+            ],
+            "Resource": "arn:aws:dynamodb:{{ aws_region }}:*:table/{{ dynamodb_table_name }}"
+          }
+        ]
+      }'
+  register: policy_result
+  failed_when: policy_result.rc != 0 and 'EntityAlreadyExists' not in policy_result.stderr
+  changed_when: policy_result.rc == 0
+  ignore_errors: yes
+
+- name: Attach DynamoDB policy to EKS node role
+  shell: |
+    NODE_ROLE=$(aws eks describe-nodegroup --cluster-name {{ cluster_name }} --nodegroup-name standard-workers --region {{ aws_region }} --query 'nodegroup.nodeRole' --output text | awk -F '/' '{print $2}' | awk -F ',' '{print $1}')
+    POLICY_ARN=$(aws iam list-policies --query 'Policies[?PolicyName==`EKSNodeDynamoDBPolicy`].Arn' --output text)
+    aws iam attach-role-policy --role-name $NODE_ROLE --policy-arn $POLICY_ARN
+  register: attach_policy
+  changed_when: attach_policy.rc == 0
+  ignore_errors: yes
+
 - name: Wait for DynamoDB table to be active
   shell: |
     aws dynamodb describe-table --table-name {{ dynamodb_table_name }} --region {{ aws_region }} --query 'Table.TableStatus' | grep ACTIVE || echo "Table not ready"
