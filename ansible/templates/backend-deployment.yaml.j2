@@ -39,7 +39,7 @@ spec:
         - name: AWS_WEB_IDENTITY_TOKEN_FILE
           value: "/var/run/secrets/eks.amazonaws.com/serviceaccount/token"
         - name: DYNAMODB_TABLE_NAME
-          value: "{{ dynamodb_table_name | default('CloudMartProducts') }}"
+          value: "{{ dynamodb_table_name | default('cloudmart-products') }}"
         {% if backend_env_vars is defined %}
         {% for key, value in backend_env_vars.items() %}
         - name: {{ key }}
