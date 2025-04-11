@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# Function to log with timestamp
+log_with_timestamp() {
+    local message="$1"
+    local command="$2"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $message"
+    eval $command
+    if [ $? -eq 0 ]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - SUCCESS: $message"
+    else
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - ERROR: $message failed with exit code $?"
+        exit 1
+    fi
+}
+
+# Check if Docker is running
+docker info > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+    echo "ERROR: Docker is not running. Please start Docker and try again."
+    exit 1
+fi
+
+# Clean up any existing containers with the same names
+echo "Cleaning up existing containers..."
+docker container rm -f cloudmart-backend-container 2>/dev/null
+docker container rm -f cloudmart-frontend-container 2>/dev/null
+
+# Build and run backend Docker container
+log_with_timestamp "Building Backend Docker Image" "cd /home/ec2-user/challenge-day2/backend && docker build -t cloudmart-backend ."
+log_with_timestamp "Running Backend Container" "cd /home/ec2-user/challenge-day2/backend && docker run -d -p 5000:5000 --env-file .env --name cloudmart-backend-container cloudmart-backend"
+
+# Build and run frontend Docker container
+log_with_timestamp "Building Frontend Docker Image" "cd /home/ec2-user/challenge-day2/frontend && docker build -t cloudmart-frontend ."
+log_with_timestamp "Running Frontend Container" "cd /home/ec2-user/challenge-day2/frontend && docker run -d -p 5001:5001 --name cloudmart-frontend-container cloudmart-frontend"
+
+# Check if containers are running
+echo "Checking container status..."
+if docker ps | grep -q "cloudmart-backend-container" && docker ps | grep -q "cloudmart-frontend-container"; then
+    echo "SUCCESS: CloudMart application is running!"
+    echo "Backend available at: http://localhost:5000"
+    echo "Frontend available at: http://localhost:5001"
+else
+    echo "ERROR: One or more containers failed to start properly."
+    docker ps -a
+    exit 1
+fi
