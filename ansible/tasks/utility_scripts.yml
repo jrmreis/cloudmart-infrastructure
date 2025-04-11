@@ -32,3 +32,11 @@
     owner: "{{ ec2_username | default('ec2-user') }}"
     group: "{{ ec2_username | default('ec2-user') }}"
     mode: '0755'
+
+ - name: Create upApp.sh script
+  template:
+    src: templates/upApp.sh.j2
+    dest: /home/ec2-user/upApp.sh
+    owner: "{{ ec2_username | default('ec2-user') }}"
+    group: "{{ ec2_username | default('ec2-user') }}"
+    mode: '0755'
