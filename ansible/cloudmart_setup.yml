@@ -12,7 +12,7 @@
     public_ip: "{{ ansible_host }}"
     ec2_username: "ec2-user"
     # Add these missing variables
-    dynamodb_table_name: "cloudmart-products"  
+    dynamodb_table_name: "CloudMartProducts"  
     cluster_name: "cloudmart"
     async_job_id: ""  # Initialize to empty string
 
