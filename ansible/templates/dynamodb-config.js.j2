@@ -1,0 +1,10 @@
+// dynamodb-config.js.j2
+const AWS = require('aws-sdk');
+const dynamoDB = new AWS.DynamoDB.DocumentClient();
+
+const tableName = '{{ dynamodb_table_name }}';
+
+module.exports = {
+  dynamoDB,
+  tableName
+};
