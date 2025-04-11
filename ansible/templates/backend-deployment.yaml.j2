@@ -5,7 +5,7 @@ metadata:
   labels:
     app: cloudmart-backend
 spec:
-  replicas: 1
+  replicas: {{ backend_replicas | default('1') }}
   selector:
     matchLabels:
       app: cloudmart-backend
@@ -17,31 +17,54 @@ spec:
       serviceAccountName: cloudmart-pod-execution-role
       containers:
       - name: cloudmart-backend
-        image: {{ lookup('env', 'AWS_ACCOUNT_ID') | default('445567090747') }}.dkr.ecr.{{ aws_region }}.amazonaws.com/cloudmart-backend:latest
+        image: {{ lookup('env', 'AWS_ACCOUNT_ID') | default('445567090747') }}.dkr.ecr.{{ aws_region | default('us-east-1') }}.amazonaws.com/cloudmart-backend:{{ backend_image_tag | default('latest') }}
         ports:
-        - containerPort: 5000
+        - containerPort: {{ backend_port | default('5000') }}
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "200m"
+            memory: "{{ backend_memory_request | default('256Mi') }}"
+            cpu: "{{ backend_cpu_request | default('200m') }}"
           limits:
-            memory: "512Mi"
-            cpu: "500m"
+            memory: "{{ backend_memory_limit | default('512Mi') }}"
+            cpu: "{{ backend_cpu_limit | default('500m') }}"
         env:
         - name: PORT
-          value: "5000"
+          value: "{{ backend_port | default('5000') }}"
         - name: AWS_REGION
-          value: "{{ aws_region }}"
+          value: "{{ aws_region | default('us-east-1') }}"
         - name: AWS_STS_REGIONAL_ENDPOINTS
           value: "regional"
         - name: AWS_ROLE_ARN
           value: "arn:aws:iam::{{ lookup('env', 'AWS_ACCOUNT_ID') | default('445567090747') }}:role/CloudMartPodExecutionRole"
         - name: AWS_WEB_IDENTITY_TOKEN_FILE
           value: "/var/run/secrets/eks.amazonaws.com/serviceaccount/token"
+        - name: DYNAMODB_TABLE_NAME
+          value: "{{ dynamodb_table_name | default('CloudMartProducts') }}"
+        # Add additional environment variables as needed
+        {% if backend_env_vars is defined %}
+        {% for key, value in backend_env_vars.items() %}
+        - name: {{ key }}
+          value: "{{ value }}"
+        {% endfor %}
+        {% endif %}
         volumeMounts:
         - name: aws-iam-token
           mountPath: /var/run/secrets/eks.amazonaws.com/serviceaccount
           readOnly: true
+        {% if backend_health_check | default(true) | bool %}
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{ backend_port | default('5000') }}
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ backend_port | default('5000') }}
+          initialDelaySeconds: 20
+          periodSeconds: 15
+        {% endif %}
       volumes:
       - name: aws-iam-token
         projected:
@@ -54,10 +77,16 @@ apiVersion: v1
 kind: Service
 metadata:
   name: cloudmart-backend-service
+  {% if backend_service_annotations is defined %}
+  annotations:
+    {% for key, value in backend_service_annotations.items() %}
+    {{ key }}: "{{ value }}"
+    {% endfor %}
+  {% endif %}
 spec:
   selector:
     app: cloudmart-backend
   ports:
-  - port: 80
-    targetPort: 5000
-  type: LoadBalancer
+  - port: {{ backend_service_port | default('80') }}
+    targetPort: {{ backend_port | default('5000') }}
+  type: {{ backend_service_type | default('LoadBalancer') }}
