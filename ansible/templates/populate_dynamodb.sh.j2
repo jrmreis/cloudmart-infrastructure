@@ -3,10 +3,10 @@
 # Set AWS region - change this to your region if different
 AWS_REGION="us-east-1"
 
-echo "Creating CloudMartProducts table if it doesn't exist..."
+echo "Creating cloudmart-products table if it doesn't exist..."
 # Create Products table if it doesn't exist
 aws dynamodb create-table \
-    --table-name CloudMartProducts \
+    --table-name cloudmart-products \
     --attribute-definitions AttributeName=id,AttributeType=S \
     --key-schema AttributeName=id,KeyType=HASH \
     --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
@@ -15,12 +15,12 @@ aws dynamodb create-table \
 
 echo "Waiting for table to be active..."
 # Wait for table creation
-aws dynamodb wait table-exists --table-name CloudMartProducts --region $AWS_REGION
+aws dynamodb wait table-exists --table-name cloudmart-products --region $AWS_REGION
 
 echo "Populating products table..."
 # Add Fruki Guarana
 aws dynamodb put-item \
-    --table-name CloudMartProducts \
+    --table-name cloudmart-products \
     --item '{
         "id": {"S": "p1"},
         "name": {"S": "Fruki Guarana"},
@@ -33,7 +33,7 @@ aws dynamodb put-item \
 
 # Add Coca Cola
 aws dynamodb put-item \
-    --table-name CloudMartProducts \
+    --table-name cloudmart-products \
     --item '{
         "id": {"S": "p2"},
         "name": {"S": "Coca Cola"},
@@ -46,7 +46,7 @@ aws dynamodb put-item \
 
 # Add Pão Francês
 aws dynamodb put-item \
-    --table-name CloudMartProducts \
+    --table-name cloudmart-products \
     --item '{
         "id": {"S": "p3"},
         "name": {"S": "Pão Francês"},
@@ -59,7 +59,7 @@ aws dynamodb put-item \
 
 # Add Bola quadrada do Kico
 aws dynamodb put-item \
-    --table-name CloudMartProducts \
+    --table-name cloudmart-products \
     --item '{
         "id": {"S": "p4"},
         "name": {"S": "Bola quadrada do Kico"},
@@ -72,7 +72,7 @@ aws dynamodb put-item \
 
 # Add Blusa Preta Adidas
 aws dynamodb put-item \
-    --table-name CloudMartProducts \
+    --table-name cloudmart-products \
     --item '{
         "id": {"S": "p5"},
         "name": {"S": "Blusa Preta Adidas"},
@@ -85,7 +85,7 @@ aws dynamodb put-item \
 
 # Add Castanha
 aws dynamodb put-item \
-    --table-name CloudMartProducts \
+    --table-name cloudmart-products \
     --item '{
         "id": {"S": "p6"},
         "name": {"S": "Castanha"},
@@ -98,7 +98,7 @@ aws dynamodb put-item \
 
 # Add Smart Phone
 aws dynamodb put-item \
-    --table-name CloudMartProducts \
+    --table-name cloudmart-products \
     --item '{
         "id": {"S": "p7"},
         "name": {"S": "Smart Phone"},
@@ -111,7 +111,7 @@ aws dynamodb put-item \
 
 # Add Picanha
 aws dynamodb put-item \
-    --table-name CloudMartProducts \
+    --table-name cloudmart-products \
     --item '{
         "id": {"S": "p8"},
         "name": {"S": "Picanha"},
@@ -123,6 +123,6 @@ aws dynamodb put-item \
     --region $AWS_REGION
 
 echo "Verifying data insertion..."
-aws dynamodb scan --table-name CloudMartProducts --region $AWS_REGION --query "Items[*].[id.S, name.S, price.N]" --output table
+aws dynamodb scan --table-name cloudmart-products --region $AWS_REGION --query "Items[*].[id.S, name.S, price.N]" --output table
 
 echo "DynamoDB products table has been populated successfully!"
