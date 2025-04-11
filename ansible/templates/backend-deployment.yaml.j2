@@ -17,7 +17,7 @@ spec:
       serviceAccountName: cloudmart-pod-execution-role
       containers:
       - name: cloudmart-backend
-        image: {{ aws_account_id }}.dkr.ecr.{{ aws_region | default('us-east-1') }}.amazonaws.com/cloudmart-backend:latest
+        image: {{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/cloudmart-frontend:{{ image_tag | default('latest') }}
         ports:
         - containerPort: 5000
         resources:
