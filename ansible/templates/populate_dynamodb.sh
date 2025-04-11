@@ -1,0 +1,128 @@
+#!/bin/bash
+
+# Set AWS region - change this to your region if different
+AWS_REGION="us-east-1"
+
+echo "Creating CloudMartProducts table if it doesn't exist..."
+# Create Products table if it doesn't exist
+aws dynamodb create-table \
+    --table-name CloudMartProducts \
+    --attribute-definitions AttributeName=id,AttributeType=S \
+    --key-schema AttributeName=id,KeyType=HASH \
+    --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
+    --region $AWS_REGION \
+    2>/dev/null || echo "Table already exists, continuing with population..."
+
+echo "Waiting for table to be active..."
+# Wait for table creation
+aws dynamodb wait table-exists --table-name CloudMartProducts --region $AWS_REGION
+
+echo "Populating products table..."
+# Add Fruki Guarana
+aws dynamodb put-item \
+    --table-name CloudMartProducts \
+    --item '{
+        "id": {"S": "p1"},
+        "name": {"S": "Fruki Guarana"},
+        "category": {"S": "Guarana"},
+        "price": {"N": "5.00"},
+        "image": {"S": "fruki.jpg"},
+        "inStock": {"BOOL": true}
+    }' \
+    --region $AWS_REGION
+
+# Add Coca Cola
+aws dynamodb put-item \
+    --table-name CloudMartProducts \
+    --item '{
+        "id": {"S": "p2"},
+        "name": {"S": "Coca Cola"},
+        "category": {"S": "Refrigerante"},
+        "price": {"N": "5.00"},
+        "image": {"S": "coca-cola.jpg"},
+        "inStock": {"BOOL": true}
+    }' \
+    --region $AWS_REGION
+
+# Add Pão Francês
+aws dynamodb put-item \
+    --table-name CloudMartProducts \
+    --item '{
+        "id": {"S": "p3"},
+        "name": {"S": "Pão Francês"},
+        "category": {"S": "Pão frances"},
+        "price": {"N": "1.99"},
+        "image": {"S": "pao-frances.jpg"},
+        "inStock": {"BOOL": true}
+    }' \
+    --region $AWS_REGION
+
+# Add Bola quadrada do Kico
+aws dynamodb put-item \
+    --table-name CloudMartProducts \
+    --item '{
+        "id": {"S": "p4"},
+        "name": {"S": "Bola quadrada do Kico"},
+        "category": {"S": "Bola quadrada do Kico"},
+        "price": {"N": "1000.00"},
+        "image": {"S": "bola-kico.jpg"},
+        "inStock": {"BOOL": true}
+    }' \
+    --region $AWS_REGION
+
+# Add Blusa Preta Adidas
+aws dynamodb put-item \
+    --table-name CloudMartProducts \
+    --item '{
+        "id": {"S": "p5"},
+        "name": {"S": "Blusa Preta Adidas"},
+        "category": {"S": "Blusa Preta Adidas para esporte"},
+        "price": {"N": "69.99"},
+        "image": {"S": "blusa-adidas.jpg"},
+        "inStock": {"BOOL": true}
+    }' \
+    --region $AWS_REGION
+
+# Add Castanha
+aws dynamodb put-item \
+    --table-name CloudMartProducts \
+    --item '{
+        "id": {"S": "p6"},
+        "name": {"S": "Castanha"},
+        "category": {"S": "Castanha de Caju"},
+        "price": {"N": "1.00"},
+        "image": {"S": "castanha.jpg"},
+        "inStock": {"BOOL": true}
+    }' \
+    --region $AWS_REGION
+
+# Add Smart Phone
+aws dynamodb put-item \
+    --table-name CloudMartProducts \
+    --item '{
+        "id": {"S": "p7"},
+        "name": {"S": "Smart Phone"},
+        "category": {"S": "6\", 12GB RAM, Snapdragon"},
+        "price": {"N": "1344.99"},
+        "image": {"S": "smartphone.jpg"},
+        "inStock": {"BOOL": true}
+    }' \
+    --region $AWS_REGION
+
+# Add Picanha
+aws dynamodb put-item \
+    --table-name CloudMartProducts \
+    --item '{
+        "id": {"S": "p8"},
+        "name": {"S": "Picanha"},
+        "category": {"S": "Carne bovina"},
+        "price": {"N": "100.00"},
+        "image": {"S": "picanha.jpg"},
+        "inStock": {"BOOL": true}
+    }' \
+    --region $AWS_REGION
+
+echo "Verifying data insertion..."
+aws dynamodb scan --table-name CloudMartProducts --region $AWS_REGION --query "Items[*].[id.S, name.S, price.N]" --output table
+
+echo "DynamoDB products table has been populated successfully!"
