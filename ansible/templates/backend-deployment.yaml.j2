@@ -40,7 +40,6 @@ spec:
           value: "/var/run/secrets/eks.amazonaws.com/serviceaccount/token"
         - name: DYNAMODB_TABLE_NAME
           value: "{{ dynamodb_table_name | default('CloudMartProducts') }}"
-        # Add additional environment variables as needed
         {% if backend_env_vars is defined %}
         {% for key, value in backend_env_vars.items() %}
         - name: {{ key }}
