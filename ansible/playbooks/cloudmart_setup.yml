@@ -31,7 +31,7 @@
         
     - name: Create master log file with system information
       template:
-        src: "master_log.j2"
+        src: "../roles/common/templates/master_log.j2"
         dest: "{{ log_dir }}/master_{{ ansible_date_time.date }}.txt"
         owner: "{{ ec2_username }}"
         group: "{{ ec2_username }}"
