@@ -1,0 +1,5 @@
+---
+# Default variables for deployment role
+eks_node_type: "t3.medium"  # For homol, could be smaller
+eks_nodes: 1                # For homol, use minimal nodes
+eks_cluster_exists: false    # Default assumption
