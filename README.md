@@ -1,5 +1,43 @@
-# cloudmart-infrastructure
+# CloudMart Ansible Project
 
-
+Ansible automation for deploying the CloudMart application infrastructure.
 on Ec2:
 ansible-playbook ansible/cloudmart_setup.yml -i 'localhost,' --connection=local
+
+## Project Structure
+
+- `ansible/playbooks/`: Playbook files
+- `ansible/roles/`: Role definitions
+- `ansible/group_vars/`: Group variables
+- `ansible/inventory/`: Environment-specific inventories
+
+## Prerequisites
+
+1. Install required collections:
+
+```bash
+ansible-galaxy collection install -r ansible/collections/requirements.yml
+
+
+# Only run Docker setup
+ansible-playbook -i ansible/inventory/homol.ini ansible/playbooks/cloudmart_setup.yml --tags docker
+
+Run specific tasks only:
+You can use tags to run only specific parts of the playbook:
+
+
+# Only run application deployment
+ansible-playbook -i ansible/inventory/homol.ini ansible/playbooks/cloudmart_setup.yml --tags application
+
+# Run multiple tagged tasks
+ansible-playbook -i ansible/inventory/homol.ini ansible/playbooks/cloudmart_setup.yml --tags "docker,application"
+
+# Only run Docker setup
+ansible-playbook -i ansible/inventory/homol.ini ansible/playbooks/cloudmart_setup.yml --tags docker
+
+# Only run application deployment
+ansible-playbook -i ansible/inventory/homol.ini ansible/playbooks/cloudmart_setup.yml --tags application
+
+# Run multiple tagged tasks
+ansible-playbook -i ansible/inventory/homol.ini ansible/playbooks/cloudmart_setup.yml --tags "docker,application"
+
