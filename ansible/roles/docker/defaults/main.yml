@@ -1,0 +1,6 @@
+---
+# Default variables for docker role
+docker_package: docker
+docker_service: docker
+docker_socket: /var/run/docker.sock
+docker_socket_mode: '0666'
