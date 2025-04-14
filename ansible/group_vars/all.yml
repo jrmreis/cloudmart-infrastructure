@@ -1,0 +1,21 @@
+---
+# Global vars
+aws_region: "us-east-1"
+cluster_name: "cloudmart"
+ec2_username: "ec2-user"
+log_dir: "/home/ec2-user/logs"
+
+# AWS ECR repositories
+backend_ecr_repo: "{{ lookup('env','AWS_ACCOUNT_ID') }}.dkr.ecr.{{ aws_region }}.amazonaws.com/cloudmart-backend"
+frontend_ecr_repo: "{{ lookup('env','AWS_ACCOUNT_ID') }}.dkr.ecr.{{ aws_region }}.amazonaws.com/cloudmart-frontend"
+
+# Docker image names and tags
+backend_image_name: "cloudmart-backend"
+backend_image_tag: "latest" 
+frontend_image_name: "cloudmart-frontend"
+frontend_image_tag: "latest"
+
+# App directories
+app_dir: "/home/ec2-user/challenge-day2"
+backend_dir: "{{ app_dir }}/backend"
+frontend_dir: "{{ app_dir }}/frontend"
