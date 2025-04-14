@@ -1,0 +1,46 @@
+---
+# Tasks for Docker installation and configuration
+- name: Install Docker
+  yum:
+    name: "{{ docker_package }}"
+    state: present
+  register: docker_install
+  tags: [docker, install]
+  
+- name: Start and enable Docker service
+  systemd:
+    name: "{{ docker_service }}"
+    state: started
+    enabled: yes
+  register: docker_service_status
+  tags: [docker, service]
+  
+- name: Add ec2-user to docker group
+  user:
+    name: "{{ ec2_username }}"
+    groups: docker
+    append: yes
+  tags: [docker, permissions]
+
+- name: Set docker socket permissions
+  file:
+    path: "{{ docker_socket }}"
+    mode: "{{ docker_socket_mode }}"
+  notify: restart docker
+  tags: [docker, permissions]
+
+- name: Test Docker installation
+  command: docker run hello-world
+  register: docker_test
+  changed_when: false
+  tags: [docker, test]
+  
+- name: Log Docker installation status
+  copy:
+    dest: "{{ log_dir }}/docker_install_{{ ansible_date_time.date }}.txt"
+    content: |
+      Docker Installation: {{ 'Successful' if docker_install.changed == false else 'Failed' }}
+      Docker Service: {{ 'Running' if docker_service_status.changed == false else 'Failed' }}
+      Docker Socket Permissions: {{ docker_socket_mode }}
+      Docker Test: {{ 'Hello World executed successfully' if docker_test.rc == 0 else 'Failed' }}
+  tags: [docker, logs]
