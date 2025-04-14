@@ -1,0 +1,46 @@
+---
+# Tasks for creating utility scripts
+- name: Create health check script
+  template:
+    src: health-check.sh.j2
+    dest: /home/ec2-user/health-check.sh
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0755'
+  tags: [scripts, health-check]
+    
+- name: Create cleanup script
+  template:
+    src: cleanup-cloudmart.sh.j2
+    dest: /home/ec2-user/cleanup-cloudmart.sh
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0755'
+  tags: [scripts, cleanup]
+    
+- name: Create log-watch script
+  template:
+    src: log-watch.sh.j2
+    dest: /home/ec2-user/log-watch.sh
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0755'
+  tags: [scripts, logs]
+
+- name: Create container deployment script
+  template:
+    src: deploy_containers.sh.j2
+    dest: /home/ec2-user/deploy_containers.sh
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0755'
+  tags: [scripts, deployment]
+    
+- name: Create user README
+  template:
+    src: README.md.j2
+    dest: "/home/ec2-user/README.md"
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0644'
+  tags: [documentation]
