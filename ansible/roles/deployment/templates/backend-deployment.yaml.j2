@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudmart-backend
+spec:
+  replicas: {{ backend_replicas }}
+  selector:
+    matchLabels:
+      app: cloudmart-backend
+  template:
+    metadata:
+      labels:
+        app: cloudmart-backend
+    spec:
+      serviceAccountName: cloudmart-pod-execution-role
+      containers:
+      - name: cloudmart-backend
+        image: {{ backend_ecr_repo }}:{{ backend_image_tag }}
+        ports:
+        - containerPort: {{ backend_port }}
+        env:
+        - name: PORT
+          value: "{{ backend_port }}"
+        - name: AWS_REGION
+          value: "{{ aws_region }}"
+        resources:
+          limits:
+            cpu: "{{ k8s_resource_limits.cpu }}"
+            memory: "{{ k8s_resource_limits.memory }}"
+          requests:
+            cpu: "{{ k8s_resource_requests.cpu }}"
+            memory: "{{ k8s_resource_requests.memory }}"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloudmart-backend-service
+spec:
+  selector:
+    app: cloudmart-backend
+  ports:
+  - port: 80
+    targetPort: {{ backend_port }}
+  type: LoadBalancer
