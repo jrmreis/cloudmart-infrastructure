@@ -13,3 +13,20 @@
 
 ## Health Check
 Run the health check script to see the current status of your deployment:
+
+## Docker Containers
+Access the applications directly:
+- Backend: http://{{ ansible_host }}:{{ backend_port }}
+- Frontend: http://{{ ansible_host }}:{{ frontend_port }}
+
+## Kubernetes Services
+Get the load balancer URLs:
+
+The Kubernetes services will be accessible at the Load Balancer URLs once fully provisioned.
+
+## Cleanup
+To delete the EKS cluster and resources when you're done:
+
+## Logs
+All setup logs are available in the {{ log_dir }} directory.
+An archive of all logs is also available at /home/ec2-user/logs-archive-*.tar.gz
