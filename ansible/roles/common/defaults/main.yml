@@ -1,0 +1,11 @@
+---
+# Default variables for common role
+required_packages:
+  - yum-utils
+  - git
+  - wget
+  - unzip
+  - tar
+  - curl
+  - jq
+  - python3-pip
