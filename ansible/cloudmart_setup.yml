@@ -26,28 +26,25 @@
         gather_subset: all
         
   tasks:
-    - name: Create logs directory
+    - name: Create logs directories
       file:
-        path: "{{ log_dir }}"
+        path: "{{ item.path }}"
         state: directory
-        owner: "{{ ec2_username }}"
-        group: "{{ ec2_username }}"
-        mode: '0755'
-        
-    - name: Create logs directory
-      file:
-        path: /var/log/cloudmart
-        state: directory
-        mode: '0755'
-      become: yes
+        owner: "{{ item.owner | default(ec2_username) }}"
+        group: "{{ item.group | default(ec2_username) }}"
+        mode: "{{ item.mode | default('0755') }}"
+      loop:
+        - { path: "{{ log_dir }}" }
+        - { path: "/var/log/cloudmart" }
+      
     - name: Create master log file with system information
       copy:
         dest: "{{ log_dir }}/master_{{ ansible_date_time.date }}.txt"
         content: |
           ========== CLOUDMART SETUP LOG ==========
           Started at: {{ ansible_date_time.iso8601 }}
-          Instance ID: {{ instance_id }}
-          Public IP: {{ public_ip }}
+          Hostname: {{ ansible_hostname }}
+          IP Address: {{ ansible_default_ipv4.address | default('localhost') }}
           =========================================
           
     - name: Import system setup tasks
@@ -104,6 +101,13 @@
         owner: "{{ ec2_username }}"
         group: "{{ ec2_username }}"
         format: gz
+    
+    handlers:
+    - name: restart docker
+      systemd:
+        name: docker
+        state: restarted
+      become: yes
         
     - name: Final completion message
       debug:
