@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# Script to clean up CloudMart Kubernetes resources and delete the EKS cluster
+# Usage: ./cleanup-cloudmart.sh
+
+LOG_FILE="{{ log_dir }}/cleanup_$(date +%Y%m%d-%H%M).txt"
+
+echo "Starting CloudMart cleanup..." | tee $LOG_FILE
+
+# Delete frontend service and deployment
+echo "Deleting frontend resources..." | tee -a $LOG_FILE
+kubectl delete service cloudmart-frontend-service | tee -a $LOG_FILE
+kubectl delete deployment cloudmart-frontend | tee -a $LOG_FILE
+
+# Delete backend service and deployment
+echo "Deleting backend resources..." | tee -a $LOG_FILE
+kubectl delete service cloudmart-backend-service | tee -a $LOG_FILE
+kubectl delete deployment cloudmart-backend | tee -a $LOG_FILE
+
+# Delete the IAM service account
+echo "Deleting IAM service account..." | tee -a $LOG_FILE
+eksctl delete iamserviceaccount \
+  --cluster={{ cluster_name }} \
+  --name=cloudmart-pod-execution-role \
+  --region {{ aws_region }} | tee -a $LOG_FILE
+
+# Delete the EKS cluster
+echo "Deleting EKS cluster '{{ cluster_name }}' in {{ aws_region }} region..." | tee -a $LOG_FILE
+eksctl delete cluster --name {{ cluster_name }} --region {{ aws_region }} | tee -a $LOG_FILE
+
+echo "CloudMart cleanup completed!" | tee -a $LOG_FILE
+echo "=== Cleanup script completed and saved to $LOG_FILE ===" | tee -a $LOG_FILE
