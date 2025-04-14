@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# Check if any docker containers are running
+if [ -z "$(docker ps -q)" ]; then
+  # No containers running, proceed with deployment
+  echo "No Docker containers running. Starting CloudMart deployment..."
+  
+  # Navigate to backend directory and build/run container
+  cd {{ backend_dir }}
+  docker build -t {{ backend_image_name }} .
+  docker run -d -p {{ backend_port }}:{{ backend_port }} --env-file .env --name {{ backend_container_name }} {{ backend_image_name }}
+  
+  # Navigate to frontend directory and build/run container
+  cd {{ frontend_dir }}
+  docker build -t {{ frontend_image_name }} .
+  docker run -d -p {{ frontend_port }}:{{ frontend_port }} --name {{ frontend_container_name }} {{ frontend_image_name }}
+  
+  # Return to original directory and check container status
+  cd
+  echo "Deployment complete. Running containers:"
+  docker ps
+else
+  echo "Docker containers are already running. Skipping deployment."
+  echo "Current running containers:"
+  docker ps
+fi
