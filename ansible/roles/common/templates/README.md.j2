@@ -1,0 +1,15 @@
+# CloudMart Deployment
+
+## Setup Information
+- Instance ID: {{ ansible_ec2_instance_id | default('Unknown') }}
+- Public IP: {{ ansible_host }}
+- Setup completed: {{ ansible_date_time.iso8601 }}
+
+## Important Directories
+- CloudMart Source: /home/ec2-user/cloudmart
+- Challenge Files: /home/ec2-user/challenge-day2
+- Kubernetes Configs: {{ k8s_dir }}
+- Logs: {{ log_dir }}
+
+## Health Check
+Run the health check script to see the current status of your deployment:
