@@ -4,6 +4,8 @@ Ansible automation for deploying the CloudMart application infrastructure.
 on Ec2:
 ansible-playbook ansible/cloudmart_setup.yml -i 'localhost,' --connection=local
 
+ansible-playbook ansible/playbooks/cloudmart_setup.yml -i 'localhost,' --connection=local --extra-vars "@ansible/group_vars/all.yml"
+
 ## Project Structure
 
 - `ansible/playbooks/`: Playbook files
