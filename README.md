@@ -41,3 +41,10 @@ ansible-playbook -i ansible/inventory/homol.ini ansible/playbooks/cloudmart_setu
 # Run multiple tagged tasks
 ansible-playbook -i ansible/inventory/homol.ini ansible/playbooks/cloudmart_setup.yml --tags "docker,application"
 
+----
+
+# Run a syntax check
+ansible-playbook -i ansible/inventory/homol.ini ansible/playbooks/cloudmart_setup.yml --syntax-check
+
+# Run the playbook in dry-run mode
+ansible-playbook -i ansible/inventory/homol.ini ansible/playbooks/cloudmart_setup.yml --check
