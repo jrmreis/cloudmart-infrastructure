@@ -1,0 +1,5 @@
+- name: Set /var/run/docker.sock permissions
+  file:
+    path: /var/run/docker.sock
+    mode: '0666'
+  notify: restart docker
