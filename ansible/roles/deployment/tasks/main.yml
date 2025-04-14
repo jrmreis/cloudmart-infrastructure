@@ -87,4 +87,41 @@
   kubernetes.core.k8s:
     state: present
     src: "{{ k8s_dir }}/backend-deployment.yaml"
-  become_
+  become_user: "{{ ec2_username }}"
+  register: backend_deployment
+  tags: [deployment, kubernetes]
+  
+- name: Apply frontend deployment
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ k8s_dir }}/frontend-deployment.yaml"
+  become_user: "{{ ec2_username }}"
+  register: frontend_deployment
+  tags: [deployment, kubernetes]
+  
+- name: Wait for services to be provisioned (load balancers take time)
+  pause:
+    seconds: 60
+    prompt: "Waiting for Kubernetes services to be provisioned..."
+  tags: [deployment, kubernetes]
+    
+- name: Get Kubernetes services status
+  shell: kubectl get services
+  args:
+    executable: /bin/bash
+  become_user: "{{ ec2_username }}"
+  register: k8s_services
+  changed_when: false
+  tags: [deployment, kubernetes, status]
+  
+- name: Log Kubernetes deployments status
+  copy:
+    dest: "{{ log_dir }}/kubernetes_deployment_{{ ansible_date_time.date }}.txt"
+    content: |
+      Backend Deployment: {{ backend_deployment.stdout | default('') }}
+      Frontend Deployment: {{ frontend_deployment.stdout | default('') }}
+      Kubernetes Services: {{ k8s_services.stdout | default('') }}
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0644'
+  tags: [deployment, kubernetes, logs]
