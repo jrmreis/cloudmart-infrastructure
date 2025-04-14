@@ -1,0 +1,6 @@
+---
+# Handlers for docker role
+- name: restart docker
+  service:
+    name: "{{ docker_service }}"
+    state: restarted
