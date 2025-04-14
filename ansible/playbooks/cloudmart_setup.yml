@@ -3,12 +3,7 @@
 - name: Configure CloudMart Workstation
   hosts: all
   become: yes
-  vars:
-    log_dir: "/home/ec2-user/logs"
-    aws_region: "us-east-1"
-    cluster_name: "cloudmart"
-    ec2_username: "ec2-user"
-    
+  
   pre_tasks:
     - name: Wait for system to become reachable
       wait_for_connection:
@@ -18,7 +13,6 @@
       setup:
         gather_subset: all
         
-  tasks:
     - name: Create logs directory
       file:
         path: "{{ log_dir }}"
@@ -27,49 +21,28 @@
         group: "{{ ec2_username }}"
         mode: '0755'
         
-    - name: Create logs directory
+    - name: Create CloudMart logs directory
       file:
         path: /var/log/cloudmart
         state: directory
         mode: '0755'
-      become: yes
-    
+        
     - name: Create master log file with system information
-      copy:
-        dest: "{{ log_dir }}/master_{{ ansible_date_time.date }}.txt"
-        content: |
-          ========== CLOUDMART SETUP LOG ==========
-          Started at: {{ ansible_date_time.iso8601 }}
-          Hostname: {{ ansible_hostname }}
-          IP Address: {{ ansible_default_ipv4.address | default('localhost') }}
-          =========================================
-          
-    - name: Import system setup tasks
-      import_tasks: tasks/system_setup.yml
-    
-    - name: Import Docker setup tasks
-      import_tasks: tasks/docker_setup.yml
-    
-    - name: Import application setup tasks
-      import_tasks: tasks/application_setup.yml
-      
-    - name: Import Kubernetes setup tasks
-      import_tasks: tasks/kubernetes_setup.yml
-      
-    - name: Import deployment tasks
-      import_tasks: tasks/deployment.yml
-      
-    - name: Create utility scripts
-      import_tasks: tasks/utility_scripts.yml
-      
-    - name: Create user README
       template:
-        src: "templates/README.md.j2"
-        dest: "/home/ec2-user/README.md"
+        src: "master_log.j2"
+        dest: "{{ log_dir }}/master_{{ ansible_date_time.date }}.txt"
         owner: "{{ ec2_username }}"
         group: "{{ ec2_username }}"
         mode: '0644'
-      
+  
+  roles:
+    - common
+    - docker
+    - kubernetes
+    - application
+    - deployment
+  
+  post_tasks:
     - name: Final status check
       shell: |
         echo "Setup completed at $(date)" > /home/ec2-user/setup-complete.log
@@ -92,4 +65,4 @@
         
     - name: Final completion message
       debug:
-        msg: "CloudMart setup completed successfully! Connect via SSH: ssh {{ ec2_username }}@{{ public_ip }}"
+        msg: "CloudMart setup completed successfully! Connect via SSH: ssh {{ ec2_username }}@{{ ansible_host }}"
