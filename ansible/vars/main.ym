@@ -1,0 +1,20 @@
+---
+# Common variables
+log_dir: "/home/ec2-user/logs"
+aws_region: "us-east-1"
+cluster_name: "cloudmart"
+ec2_username: "ec2-user"
+
+# ECR repositories
+backend_ecr_repo: "{{ lookup('pipe', 'aws sts get-caller-identity --query Account --output text') }}.dkr.ecr.{{ aws_region }}.amazonaws.com/cloudmart-backend"
+frontend_ecr_repo: "{{ lookup('pipe', 'aws sts get-caller-identity --query Account --output text') }}.dkr.ecr.{{ aws_region }}.amazonaws.com/cloudmart-frontend"
+
+# Docker image info
+backend_image_name: "cloudmart-backend"
+backend_image_tag: "latest"
+frontend_image_name: "cloudmart-frontend"
+frontend_image_tag: "latest"
+
+# Instance metadata
+instance_id: "{{ lookup('pipe', 'curl -s http://169.254.169.254/latest/meta-data/instance-id') }}"
+public_ip: "{{ lookup('pipe', 'curl -s http://169.254.169.254/latest/meta-data/public-ipv4') }}"
