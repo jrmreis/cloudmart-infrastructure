@@ -1,0 +1,90 @@
+---
+# Tasks for creating and deploying to the EKS cluster
+
+- name: Create EKS cluster (this will take ~15 minutes)
+  shell: |
+    eksctl create cluster \
+      --name {{ cluster_name }} \
+      --region {{ aws_region }} \
+      --nodegroup-name standard-workers \
+      --node-type {{ eks_node_type }} \
+      --nodes {{ eks_nodes }} \
+      --with-oidc \
+      --managed || true
+  register: create_cluster
+  args:
+    executable: /bin/bash
+  async: 1800  # 30 minutes
+  poll: 0
+  tags: [deployment, eks]
+
+- name: Check EKS cluster creation status
+  shell: eksctl get cluster --name {{ cluster_name }} --region {{ aws_region }} || echo "Cluster creation in progress"
+  register: cluster_status
+  until: "'{{ cluster_name }}' in cluster_status.stdout"
+  retries: 10
+  delay: 60
+  ignore_errors: yes
+  tags: [deployment, eks]
+
+- name: Update kubectl configuration
+  shell: aws eks update-kubeconfig --name {{ cluster_name }} --region {{ aws_region }}
+  register: kubeconfig_update
+  ignore_errors: yes
+  failed_when: false
+  tags: [deployment, eks]
+  
+- name: Associate IAM OIDC Provider with EKS Cluster
+  shell: |
+    eksctl utils associate-iam-oidc-provider \
+      --region={{ aws_region }} \
+      --cluster={{ cluster_name }} \
+      --approve
+  register: oidc_association
+  changed_when: "'associated' in oidc_association.stdout"
+  failed_when: oidc_association.rc != 0
+  tags: [deployment, eks, iam]
+
+- name: Create IAM Service Account for CloudMart Pods
+  shell: |
+    eksctl create iamserviceaccount \
+      --cluster={{ cluster_name }} \
+      --name=cloudmart-pod-execution-role \
+      --role-name=CloudMartPodExecutionRole \
+      --attach-policy-arn=arn:aws:iam::aws:policy/AdministratorAccess \
+      --region={{ aws_region }} \
+      --approve
+  register: service_account_creation
+  changed_when: "'created' in service_account_creation.stdout"
+  failed_when: service_account_creation.rc != 0
+  tags: [deployment, eks, iam]
+
+- name: Debug IAM Service Account Creation
+  debug:
+    var: service_account_creation
+  when: service_account_creation.stdout is defined
+  tags: [deployment, eks, iam, debug]
+  
+- name: Create backend deployment file
+  template:
+    src: backend-deployment.yaml.j2
+    dest: "{{ k8s_dir }}/backend-deployment.yaml"
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0644'
+  tags: [deployment, kubernetes]
+    
+- name: Create frontend deployment file
+  template:
+    src: frontend-deployment.yaml.j2
+    dest: "{{ k8s_dir }}/frontend-deployment.yaml"
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0644'
+  tags: [deployment, kubernetes]
+    
+- name: Apply backend deployment
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ k8s_dir }}/backend-deployment.yaml"
+  become_
