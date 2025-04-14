@@ -1,0 +1,12 @@
+---
+# Production environment-specific variables
+backend_replicas: 3
+frontend_replicas: 3
+k8s_resource_limits:
+  cpu: "1"
+  memory: "1Gi"
+k8s_resource_requests:
+  cpu: "0.5"
+  memory: "512Mi"
+eks_node_type: "t3.large"
+eks_nodes: 3
