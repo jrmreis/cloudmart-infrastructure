@@ -26,12 +26,7 @@
     path: /var/run/docker.sock
     mode: '0666'
   become: yes
-
-- name: Restart Docker service
-  systemd:
-    name: docker
-    state: restarted
-  become: yes
+  notify: restart docker
 
 - name: Test Docker installation
   command: docker run hello-world
