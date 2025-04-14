@@ -1,0 +1,143 @@
+---
+# Tasks for installing EKS tools and setting up Kubernetes
+- name: Install eksctl
+  block:
+    - name: Download eksctl
+      get_url:
+        url: "{{ eksctl_download_url }}"
+        dest: /tmp/eksctl.tar.gz
+        mode: '0644'
+      
+    - name: Extract eksctl
+      unarchive:
+        src: /tmp/eksctl.tar.gz
+        dest: /tmp
+        remote_src: yes
+      
+    - name: Move eksctl to /usr/bin
+      copy:
+        src: /tmp/eksctl
+        dest: /usr/bin/eksctl
+        mode: '0755'
+        remote_src: yes
+        
+    - name: Verify eksctl installation
+      command: eksctl version
+      register: eksctl_version
+      changed_when: false
+      
+    - name: Log eksctl installation
+      copy:
+        dest: "{{ log_dir }}/eksctl_install_{{ ansible_date_time.date }}.txt"
+        content: "{{ eksctl_version.stdout }}"
+  tags: [kubernetes, eksctl]
+
+- name: Install kubectl
+  block:
+    - name: Download kubectl
+      get_url:
+        url: "{{ kubectl_download_url }}"
+        dest: /tmp/kubectl
+        mode: '0755'
+        
+    - name: Create bin directory for ec2-user
+      file:
+        path: /home/{{ ec2_username }}/bin
+        state: directory
+        owner: "{{ ec2_username }}"
+        group: "{{ ec2_username }}"
+        mode: '0755'
+        
+    - name: Copy kubectl to user bin directory
+      copy:
+        src: /tmp/kubectl
+        dest: /home/{{ ec2_username }}/bin/kubectl
+        owner: "{{ ec2_username }}"
+        group: "{{ ec2_username }}"
+        mode: '0755'
+        remote_src: yes
+        
+    - name: Link kubectl to system path
+      file:
+        src: /home/{{ ec2_username }}/bin/kubectl
+        dest: /usr/local/bin/kubectl
+        state: link
+        
+    - name: Update bashrc with PATH
+      lineinfile:
+        path: /home/{{ ec2_username }}/.bashrc
+        line: 'export PATH=$PATH:$HOME/bin'
+        state: present
+        
+    - name: Verify kubectl installation
+      command: /home/{{ ec2_username }}/bin/kubectl version --short --client
+      register: kubectl_version
+      changed_when: false
+      
+    - name: Log kubectl installation
+      copy:
+        dest: "{{ log_dir }}/kubectl_install_{{ ansible_date_time.date }}.txt"
+        content: "{{ kubectl_version.stdout }}"
+  tags: [kubernetes, kubectl]
+
+- name: Create k8s directory
+  file:
+    path: "{{ k8s_dir }}"
+    state: directory
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0755'
+  tags: [kubernetes, directory]
+
+- name: Authenticate with ECR
+  shell: |
+    # Get your AWS account ID
+    AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+    # Authenticate
+    aws ecr get-login-password --region {{ aws_region }} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.{{ aws_region }}.amazonaws.com
+  args:
+    executable: /bin/bash
+  register: ecr_auth
+  ignore_errors: yes
+  tags: [kubernetes, ecr]
+
+- name: Tag and push backend image to ECR
+  shell: |
+    # Get your AWS account ID
+    AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+    # Define ECR repository URL
+    BACKEND_REPO="${AWS_ACCOUNT_ID}.dkr.ecr.{{ aws_region }}.amazonaws.com/cloudmart-backend"
+    # Tag and push
+    docker tag {{ backend_image_name }}:{{ backend_image_tag }} ${BACKEND_REPO}:{{ backend_image_tag }}
+    docker push ${BACKEND_REPO}:{{ backend_image_tag }}
+  args:
+    executable: /bin/bash
+  register: backend_push
+  ignore_errors: yes
+  tags: [kubernetes, ecr, backend]
+  
+- name: Tag and push frontend image to ECR
+  shell: |
+    # Get your AWS account ID
+    AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+    # Define ECR repository URL
+    FRONTEND_REPO="${AWS_ACCOUNT_ID}.dkr.ecr.{{ aws_region }}.amazonaws.com/cloudmart-frontend"
+    # Tag and push
+    docker tag {{ frontend_image_name }}:{{ frontend_image_tag }} ${FRONTEND_REPO}:{{ frontend_image_tag }}
+    docker push ${FRONTEND_REPO}:{{ frontend_image_tag }}
+  args:
+    executable: /bin/bash
+  register: frontend_push
+  ignore_errors: yes
+  tags: [kubernetes, ecr, frontend]
+
+- name: Check running containers
+  shell: docker ps
+  register: docker_status
+  changed_when: false
+  tags: [kubernetes, status]
+
+- name: Display running containers
+  debug:
+    var: docker_status.stdout_lines
+  tags: [kubernetes, status]
