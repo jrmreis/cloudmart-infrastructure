@@ -59,7 +59,7 @@
   changed_when: false
   ignore_errors: yes
 
-- name: Create EKS cluster with nodegroup (this will take ~15 minutes)
+- name: Create EKS cluster
   shell: |
     eksctl create cluster \
       --name {{ cluster_name }} \
@@ -67,35 +67,40 @@
       --nodegroup-name standard-workers \
       --node-type t3.medium \
       --nodes 1 \
-      --nodes-min 1 \
-      --nodes-max 3 \
-      --managed
+      --with-oidc \
+      --managed || echo "Cluster creation already initiated or complete"
+  register: create_cluster
   args:
     executable: /bin/bash
-    chdir: "/home/ec2-user/k8s"
-  become_user: "{{ ec2_username }}"
-  register: eks_create
-  # Use async to prevent Ansible timeout during cluster creation
   async: 1800  # 30 minutes
   poll: 0
-  when: '"Cluster not found" in cluster_exists.stdout'
-  
-# Save the async job ID to a variable that won't get lost
-- name: Save async job ID
-  set_fact:
-    async_job_id: "{{ eks_create.ansible_job_id }}"
-  when: eks_create is defined and eks_create.ansible_job_id is defined
+  failed_when: false
+  tags: kubernetes
 
-- name: Check EKS cluster creation status
+- name: Save cluster creation job ID
+  set_fact:
+    cluster_job_id: "{{ create_cluster.ansible_job_id }}"
+  when: create_cluster.ansible_job_id is defined
+  tags: kubernetes
+
+- name: Wait for cluster creation to complete
   async_status:
-    jid: "{{ async_job_id | default('') }}"
+    jid: "{{ cluster_job_id }}"
   register: job_result
-  until: job_result.finished | default(false)
-  retries: 60
+  until: job_result.finished
+  retries: 60  # 60 x 30 seconds = 30 minutes
   delay: 30
-  # Remove async tracking if job is no longer valid
+  when: cluster_job_id is defined
+  tags: kubernetes
+
+- name: Verify EKS cluster exists
+  shell: eksctl get cluster --name {{ cluster_name }} --region {{ aws_region }}
+  register: cluster_status
+  retries: 5
+  delay: 10
+  until: cluster_status.rc == 0
   ignore_errors: yes
-  when: async_job_id is defined and async_job_id != ""
+  tags: kubernetes
 
 - name: Debug Async Job Status
   debug:
