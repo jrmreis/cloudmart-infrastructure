@@ -1,0 +1,5 @@
+---
+# Default variables for kubernetes role
+kubectl_version: "1.18.9"
+kubectl_download_url: "https://amazon-eks.s3.us-west-2.amazonaws.com/1.18.9/2020-11-02/bin/linux/amd64/kubectl"
+eksctl_download_url: "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_{{ ansible_system }}_amd64.tar.gz"
