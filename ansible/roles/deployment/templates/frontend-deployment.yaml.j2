@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudmart-frontend
+spec:
+  replicas: {{ frontend_replicas }}
+  selector:
+    matchLabels:
+      app: cloudmart-frontend
+  template:
+    metadata:
+      labels:
+        app: cloudmart-frontend
+    spec:
+      containers:
+      - name: cloudmart-frontend
+        image: {{ frontend_ecr_repo }}:{{ frontend_image_tag }}
+        ports:
+        - containerPort: {{ frontend_port }}
+        env:
+        - name: VITE_API_BASE_URL
+          value: "http://cloudmart-backend-service/api"
+        resources:
+          limits:
+            cpu: "{{ k8s_resource_limits.cpu }}"
+            memory: "{{ k8s_resource_limits.memory }}"
+          requests:
+            cpu: "{{ k8s_resource_requests.cpu }}"
+            memory: "{{ k8s_resource_requests.memory }}"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloudmart-frontend-service
+spec:
+  selector:
+    app: cloudmart-frontend
+  ports:
+  - port: 80
+    targetPort: {{ frontend_port }}
+  type: LoadBalancer
