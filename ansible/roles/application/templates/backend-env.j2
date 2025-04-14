@@ -1,0 +1,6 @@
+PORT={{ backend_port }}
+AWS_REGION={{ aws_region }}
+BEDROCK_AGENT_ID={{ lookup('env', 'BEDROCK_AGENT_ID') | default('<seu-bedrock-agent-id>') }}
+BEDROCK_AGENT_ALIAS_ID={{ lookup('env', 'BEDROCK_AGENT_ALIAS_ID') | default('<seu-bedrock-agent-alias-id>') }}
+OPENAI_API_KEY={{ lookup('env', 'OPENAI_API_KEY') | default('<sua-chave-api-openai>') }}
+OPENAI_ASSISTANT_ID={{ lookup('env', 'OPENAI_ASSISTANT_ID') | default('<seu-id-assistente-openai>') }}
