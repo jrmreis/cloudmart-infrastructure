@@ -3,6 +3,8 @@
 - name: Configure CloudMart Workstation
   hosts: all
   become: yes
+  vars:
+    environment: "{{ lookup('env', 'ENVIRONMENT') | default('homol') }}"
   
   pre_tasks:
     - name: Wait for system to become reachable
