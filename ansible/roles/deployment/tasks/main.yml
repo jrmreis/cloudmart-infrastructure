@@ -1,5 +1,15 @@
 ---
 # Tasks for creating and deploying to the EKS cluster
+- name: Check AWS credentials
+  shell: aws sts get-caller-identity
+  register: aws_identity
+  ignore_errors: yes
+  tags: [deployment, aws]
+  
+- name: Debug AWS identity
+  debug:
+    var: aws_identity
+  tags: [deployment, aws]
 
 - name: Create EKS cluster (this will take ~15 minutes)
   shell: |
