@@ -28,6 +28,16 @@
   poll: 0
   tags: [deployment, eks]
 
+- name: Wait for EKS cluster to be fully created
+  shell: |
+    eksctl get cluster --name {{ cluster_name }} --region {{ aws_region }} | grep -q "ACTIVE"
+  register: cluster_status
+  until: cluster_status.rc == 0
+  retries: 30  # Increased from 10 to 30
+  delay: 60    # Checking every minute
+  ignore_errors: yes
+  tags: [deployment, eks]
+
 - name: Check EKS cluster creation status
   shell: eksctl get cluster --name {{ cluster_name }} --region {{ aws_region }} || echo "Cluster creation in progress"
   register: cluster_status
