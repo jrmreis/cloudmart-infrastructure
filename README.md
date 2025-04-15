@@ -6,6 +6,10 @@ ansible-playbook ansible/cloudmart_setup.yml -i 'localhost,' --connection=local
 
 ansible-playbook ansible/playbooks/cloudmart_setup.yml -i 'localhost,' --connection=local --extra-vars "@ansible/group_vars/all.yml"
 
+ansible-playbook ansible/playbooks/cloudmart_setup.yml -i 'localhost,' --connection=local --extra-vars "@ansible/group_vars/all.yml" -e "ansible_python_interpreter=/usr/bin/python3"
+
+
+
 ## Project Structure
 
 - `ansible/playbooks/`: Playbook files
