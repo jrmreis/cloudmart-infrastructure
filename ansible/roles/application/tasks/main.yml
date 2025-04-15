@@ -105,39 +105,29 @@
   tags: [application, docker, build]
   
 - name: Check if backend container exists
-  docker_container_info:
-    name: "{{ backend_container_name }}"
-  register: backend_container_info
+  shell: docker ps -a -q --filter name="{{ backend_container_name }}" | wc -l
+  register: backend_container_count
+  changed_when: false
   tags: [application, docker, container]
 
 - name: Run backend container
-  docker_container:
-    name: "{{ backend_container_name }}"
-    image: "{{ backend_image_name }}:{{ backend_image_tag }}"
-    state: started
-    restart_policy: unless-stopped
-    ports:
-      - "{{ backend_port }}:{{ backend_port }}"
-    env_file: "{{ backend_dir }}/.env"
-  when: not backend_container_info.exists
+  shell: |
+    if [ "{{ backend_container_count.stdout }}" = "0" ]; then
+      docker run -d -p {{ backend_port }}:{{ backend_port }} --env-file {{ backend_dir }}/.env --name {{ backend_container_name }} {{ backend_image_name }}:{{ backend_image_tag }}
+    fi
   become: yes
   tags: [application, docker, container]
 
 - name: Check if frontend container exists
-  docker_container_info:
-    name: "{{ frontend_container_name }}"
-  register: frontend_container_info
+  shell: docker ps -a -q --filter name="{{ frontend_container_name }}" | wc -l
+  register: frontend_container_count
+  changed_when: false
   tags: [application, docker, container]
 
 - name: Run frontend container
-  docker_container:
-    name: "{{ frontend_container_name }}"
-    image: "{{ frontend_image_name }}:{{ frontend_image_tag }}"
-    state: started
-    restart_policy: unless-stopped
-    ports:
-      - "{{ frontend_port }}:{{ frontend_port }}"
-    env_file: "{{ frontend_dir }}/.env"
-  when: not frontend_container_info.exists
+  shell: |
+    if [ "{{ frontend_container_count.stdout }}" = "0" ]; then
+      docker run -d -p {{ frontend_port }}:{{ frontend_port }} --name {{ frontend_container_name }} {{ frontend_image_name }}:{{ frontend_image_tag }}
+    fi
   become: yes
   tags: [application, docker, container]
