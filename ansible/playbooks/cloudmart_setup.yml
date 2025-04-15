@@ -38,11 +38,11 @@
         mode: '0644'
   
   roles:
-    - common
-    - docker
-    - kubernetes
-    - application
-    - deployment
+    - role: "../roles/common"
+    - role: "../roles/docker"
+    - role: "../roles/kubernetes"
+    - role: "../roles/application"
+    - role: "../roles/deployment"
   
   post_tasks:
     - name: Final status check
