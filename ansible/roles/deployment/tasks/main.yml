@@ -140,12 +140,13 @@
   tags: [deployment, kubernetes]
     
 - name: Get Kubernetes services status
-  shell: kubectl get services
+  shell: kubectl get services || echo "Unable to connect to cluster"
   args:
     executable: /bin/bash
   become_user: "{{ ec2_username }}"
   register: k8s_services
   changed_when: false
+  ignore_errors: yes
   tags: [deployment, kubernetes, status]
   
 - name: Log Kubernetes deployments status
