@@ -95,22 +95,12 @@
   tags: [application, docker]
     
 - name: Build backend Docker image
-  docker_image:
-    name: "{{ backend_image_name }}"
-    build:
-      path: "{{ backend_dir }}"
-    source: build
-    tag: "{{ backend_image_tag }}"
+  shell: docker build -t "{{ backend_image_name }}:{{ backend_image_tag }}" "{{ backend_dir }}"
   become: yes
   tags: [application, docker, build]
   
 - name: Build frontend Docker image
-  docker_image:
-    name: "{{ frontend_image_name }}"
-    build:
-      path: "{{ frontend_dir }}"
-    source: build
-    tag: "{{ frontend_image_tag }}"
+  shell: docker build -t "{{ frontend_image_name }}:{{ frontend_image_tag }}" "{{ frontend_dir }}"
   become: yes
   tags: [application, docker, build]
   
