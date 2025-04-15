@@ -51,11 +51,11 @@
         echo "Docker container status:" >> {{ log_dir }}/setup-complete.log
         docker ps >> {{ log_dir }}/setup-complete.log
         echo "Kubernetes status:" >> {{ log_dir }}/setup-complete.log
-       kubectl get pods >> {{ log_dir }}/setup-complete.log
+        kubectl get pods >> {{ log_dir }}/setup-complete.log
       args:
         executable: /bin/bash
       register: final_status
-     become_user: "{{ ec2_username }}"
+      become_user: "{{ ec2_username }}"
       
     - name: Archive log files
       archive:
