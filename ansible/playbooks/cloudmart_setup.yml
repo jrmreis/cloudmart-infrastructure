@@ -47,15 +47,15 @@
   post_tasks:
     - name: Final status check
       shell: |
-        echo "Setup completed at $(date)" > /home/ec2-user/setup-complete.log
-        echo "Docker container status:" >> /home/ec2-user/setup-complete.log
-        docker ps >> /home/ec2-user/setup-complete.log
-        echo "Kubernetes status:" >> /home/ec2-user/setup-complete.log
-        kubectl get pods >> /home/ec2-user/setup-complete.log
+        echo "Setup completed at $(date)" > {{ log_dir }}/setup-complete.log
+        echo "Docker container status:" >> {{ log_dir }}/setup-complete.log
+        docker ps >> {{ log_dir }}/setup-complete.log
+        echo "Kubernetes status:" >> {{ log_dir }}/setup-complete.log
+       kubectl get pods >> {{ log_dir }}/setup-complete.log
       args:
         executable: /bin/bash
       register: final_status
-      become_user: "{{ ec2_username }}"
+     become_user: "{{ ec2_username }}"
       
     - name: Archive log files
       archive:
