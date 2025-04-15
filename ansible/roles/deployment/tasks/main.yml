@@ -50,10 +50,12 @@
 - name: Update kubectl configuration
   shell: |
     aws eks update-kubeconfig --name {{ cluster_name }} --region {{ aws_region }}
-    kubectl config use-context arn:aws:eks:{{ aws_region }}:$(aws sts get-caller-identity --query Account --output text):cluster/{{ cluster_name }}
+    mkdir -p ~/.kube
+    export KUBECONFIG=~/.kube/config
+  args:
+    executable: /bin/bash
   register: kubeconfig_update
   ignore_errors: yes
-  failed_when: false
   tags: [deployment, eks]
   
 - name: Associate IAM OIDC Provider with EKS Cluster
