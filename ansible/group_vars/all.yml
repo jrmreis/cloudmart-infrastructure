@@ -7,8 +7,8 @@ log_dir: "/home/ec2-user/logs"
 
 # AWS ECR repositories
 # Use actual ECR repos from inventory but with better variable names
-backend_ecr_repo: "{{ hostvars[inventory_hostname].backend_ecr_repo }}"
-frontend_ecr_repo: "{{ hostvars[inventory_hostname].frontend_ecr_repo }}"
+backend_ecr_repo: "445567090747.dkr.ecr.us-east-1.amazonaws.com/cloudmart-backend"
+frontend_ecr_repo: "445567090747.dkr.ecr.us-east-1.amazonaws.com/cloudmart-frontend"
 
 # Docker image names and tags
 backend_image_name: "cloudmart-backend"
