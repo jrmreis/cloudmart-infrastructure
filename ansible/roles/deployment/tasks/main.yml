@@ -145,6 +145,15 @@
   register: k8s_services
   changed_when: false
   tags: [deployment, kubernetes, update]
+
+- name: Creating EKS workers
+  shell: eksctl create nodegroup --cluster=cloudmart --name=standard-workers --node-type=t3.medium --nodes=1 --region us-east-1
+  args:
+    executable: /bin/bash
+  become_user: "{{ ec2_username }}"
+  register: k8s_services
+  changed_when: false
+  tags: [deployment, kubernetes, workers]
       
 - name: Get Kubernetes services status
   shell: kubectl get services
