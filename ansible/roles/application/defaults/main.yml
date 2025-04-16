@@ -2,7 +2,7 @@
 # Default variables for application role
 backend_zip_url: "https://tcb-public-events.s3.amazonaws.com/mdac/resources/day2/cloudmart-backend.zip"
 frontend_zip_url: "https://tcb-public-events.s3.amazonaws.com/mdac/resources/day2/cloudmart-frontend.zip"
-backend_port: 3000
-frontend_port: 3001
+backend_port: 5000
+frontend_port: 5001
 backend_container_name: cloudmart-backend-container
 frontend_container_name: cloudmart-frontend-container
