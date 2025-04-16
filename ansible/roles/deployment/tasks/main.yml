@@ -136,7 +136,16 @@
     seconds: 60
     prompt: "Waiting for Kubernetes services to be provisioned..."
   tags: [deployment, kubernetes]
-    
+  
+- name: Update EKS config
+  shell: aws eks update-kubeconfig --region us-east-1 --name cloudmart
+  args:
+    executable: /bin/bash
+  become_user: "{{ ec2_username }}"
+  register: k8s_services
+  changed_when: false
+  tags: [deployment, kubernetes, update]
+      
 - name: Get Kubernetes services status
   shell: kubectl get services
   args:
