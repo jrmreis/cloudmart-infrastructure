@@ -21,6 +21,7 @@ app_dir: "/home/ec2-user/challenge-day2"
 backend_dir: "{{ app_dir }}/backend"
 frontend_dir: "{{ app_dir }}/frontend"
 k8s_dir: "/home/ec2-user/k8s"
+backend_service_name: "cloudmart-backend-service"
 
 # Homol environment variables
 # These could be overridden in environment-specific files
