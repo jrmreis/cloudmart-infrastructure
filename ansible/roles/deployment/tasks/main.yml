@@ -104,20 +104,7 @@
     group: "{{ ec2_username }}"
     mode: '0644'
   tags: [deployment, kubernetes]
-    
-- name: Apply backend deployment
-  shell: |
-    if command -v kubectl >/dev/null 2>&1; then
-      kubectl apply -f "{{ k8s_dir }}/backend-deployment.yaml" || echo "Kubernetes cluster not accessible. Skipping deployment."
-    else
-      echo "kubectl not found. Skipping deployment."
-    fi
-  args:
-    executable: /bin/bash
-  register: backend_deployment
-  ignore_errors: yes
-  tags: [deployment, kubernetes]
-  
+   
 - name: Apply frontend deployment
   shell: |
     if command -v kubectl >/dev/null 2>&1; then
@@ -163,6 +150,19 @@
   register: k8s_services
   changed_when: false
   tags: [deployment, kubernetes, status]
+  
+- name: Apply backend deployment
+  shell: |
+    if command -v kubectl >/dev/null 2>&1; then
+      kubectl apply -f "{{ k8s_dir }}/backend-deployment.yaml" || echo "Kubernetes cluster not accessible. Skipping deployment."
+    else
+      echo "kubectl not found. Skipping deployment."
+    fi
+  args:
+    executable: /bin/bash
+  register: backend_deployment
+  ignore_errors: yes
+  tags: [deployment, kubernetes]
   
 - name: Log Kubernetes deployments status
   copy:
