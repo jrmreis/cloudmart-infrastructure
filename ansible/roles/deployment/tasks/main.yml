@@ -129,8 +129,7 @@
   register: configmap_apply
   ignore_errors: yes
   tags: [deployment, kubernetes]
-
-
+  
 - name: Create config map template
   template:
     src: cloudmart-config.yaml.j2
@@ -138,16 +137,6 @@
     owner: "{{ ec2_username }}"
     group: "{{ ec2_username }}"
     mode: '0644'
-  tags: [deployment, kubernetes]
-  
-- name: Get backend LoadBalancer URL
-  shell: |
-    BACKEND_URL=$(kubectl get svc cloudmart-backend-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-    sed -i "s|http://{{'{{'}} (kubectl get svc cloudmart-backend-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}') {{'}}'}}|http://$BACKEND_URL|g" "{{ k8s_dir }}/cloudmart-config.yaml"
-  args:
-    executable: /bin/bash
-  register: backend_url_replacement
-  ignore_errors: yes
   tags: [deployment, kubernetes]
   
 - name: Apply ConfigMap
@@ -169,9 +158,15 @@
   tags: [deployment, kubernetes]
     
 - name: Wait for services to be provisioned (load balancers take time)
-  pause:
-    seconds: 60
-    prompt: "Waiting for Kubernetes services to be provisioned..."
+  shell: |
+    kubectl get svc cloudmart-backend-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+  args:
+    executable: /bin/bash
+  register: backend_lb_url
+  until: backend_lb_url.stdout != ""
+  retries: 15
+  delay: 20
+  ignore_errors: yes
   tags: [deployment, kubernetes]
   
 - name: Update EKS config
@@ -182,6 +177,16 @@
   register: k8s_services
   changed_when: false
   tags: [deployment, kubernetes, update]
+
+- name: Get backend LoadBalancer URL
+  shell: |
+    BACKEND_URL=$(kubectl get svc cloudmart-backend-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+    sed -i "s|http://{{'{{'}} (kubectl get svc cloudmart-backend-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}') {{'}}'}}|http://$BACKEND_URL|g" "{{ k8s_dir }}/cloudmart-config.yaml"
+  args:
+    executable: /bin/bash
+  register: backend_url_replacement
+  ignore_errors: yes
+  tags: [deployment, kubernetes]
 
 - name: Creating EKS workers
   shell: eksctl create nodegroup --cluster=cloudmart --name=standard-workers --node-type=t3.medium --nodes=1 --region us-east-1
@@ -203,17 +208,13 @@
   
 - name: Apply backend deployment
   shell: |
-    if command -v kubectl >/dev/null 2>&1; then
-      kubectl apply -f "{{ k8s_dir }}/backend-deployment.yaml" || echo "Kubernetes cluster not accessible. Skipping deployment."
-    else
-      echo "kubectl not found. Skipping deployment."
-    fi
+    kubectl apply -f "{{ k8s_dir }}/backend-deployment.yaml"
   args:
     executable: /bin/bash
   register: backend_deployment
   ignore_errors: yes
   tags: [deployment, kubernetes]
-
+  
 - name: Apply frontend deployment
   shell: |
     if command -v kubectl >/dev/null 2>&1; then
