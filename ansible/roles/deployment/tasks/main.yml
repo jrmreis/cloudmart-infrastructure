@@ -95,6 +95,41 @@
     group: "{{ ec2_username }}"
     mode: '0644'
   tags: [deployment, kubernetes]
+  
+- name: Wait for backend service to get LoadBalancer URL
+  shell: |
+    kubectl get svc cloudmart-backend-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+  register: backend_lb_result
+  until: backend_lb_result.stdout != ""
+  retries: 15
+  delay: 20
+  ignore_errors: yes
+  tags: [deployment, kubernetes]
+
+- name: Set backend LoadBalancer URL
+  set_fact:
+    backend_lb_url: "{{ backend_lb_result.stdout }}"
+  when: backend_lb_result.stdout is defined and backend_lb_result.stdout != ""
+  tags: [deployment, kubernetes]
+
+- name: Create config map template
+  template:
+    src: cloudmart-config.yaml.j2
+    dest: "{{ k8s_dir }}/cloudmart-config.yaml"
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0644'
+  tags: [deployment, kubernetes]
+
+- name: Apply ConfigMap
+  shell: |
+    kubectl apply -f "{{ k8s_dir }}/cloudmart-config.yaml"
+  args:
+    executable: /bin/bash
+  register: configmap_apply
+  ignore_errors: yes
+  tags: [deployment, kubernetes]
+
 
 - name: Create config map template
   template:
