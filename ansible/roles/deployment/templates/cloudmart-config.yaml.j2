@@ -1,6 +1,13 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: cloudmart-config
-data:
-  backend_url: "http://{{ '{{' }} (kubectl get svc cloudmart-backend-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}') {{ '}}' }}/api"
+# Get the backend LoadBalancer URL
+- name: Wait for backend LoadBalancer to be provisioned
+  shell: kubectl get svc cloudmart-backend-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+  register: backend_url
+  until: backend_url.stdout != ""
+  retries: 10
+  delay: 15
+  
+# Create the ConfigMap with the actual URL
+- name: Create ConfigMap for backend URL
+  shell: |
+    kubectl create configmap cloudmart-config --from-literal=backend_url="http://{{ backend_url.stdout }}/api" --dry-run=client -o yaml | kubectl apply -f -
+  when: backend_url.stdout != ""
