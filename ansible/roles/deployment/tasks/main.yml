@@ -106,32 +106,6 @@
     group: "{{ ec2_username }}"
     mode: '0644'
   tags: [deployment, kubernetes]
-    
-- name: Apply backend deployment
-  shell: |
-    if command -v kubectl >/dev/null 2>&1; then
-      kubectl apply -f "{{ k8s_dir }}/backend-deployment.yaml" || echo "Kubernetes cluster not accessible. Skipping deployment."
-    else
-      echo "kubectl not found. Skipping deployment."
-    fi
-  args:
-    executable: /bin/bash
-  register: backend_deployment
-  ignore_errors: yes
-  tags: [deployment, kubernetes]
-  
-- name: Apply frontend deployment
-  shell: |
-    if command -v kubectl >/dev/null 2>&1; then
-      kubectl apply -f "{{ k8s_dir }}/frontend-deployment.yaml" || echo "Kubernetes cluster not accessible. Skipping deployment."
-    else
-      echo "kubectl not found. Skipping deployment."
-    fi
-  args:
-    executable: /bin/bash
-  register: frontend_deployment
-  ignore_errors: yes
-  tags: [deployment, kubernetes]
   
 - name: Wait for services to be provisioned (load balancers take time)
   pause:
@@ -148,6 +122,48 @@
   changed_when: false
   ignore_errors: yes
   tags: [deployment, kubernetes, status]
+  
+- name: Create script to apply ConfigMap
+  template:
+    src: create-configmap.sh.j2
+    dest: "{{ k8s_dir }}/create-configmap.sh"
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0755'
+  tags: [deployment, kubernetes]
+  
+- name: Apply backend deployment
+  shell: |
+    kubectl apply -f "{{ k8s_dir }}/backend-deployment.yaml"
+  args:
+    executable: /bin/bash
+  register: backend_deployment
+  ignore_errors: yes
+  tags: [deployment, kubernetes]
+  
+- name: Wait for backend service to be created
+  pause:
+    seconds: 30
+    prompt: "Waiting for backend service to be created..."
+  tags: [deployment, kubernetes]
+  
+- name: Create ConfigMap with backend URL
+  shell: |
+    {{ k8s_dir }}/create-configmap.sh
+  args:
+    executable: /bin/bash
+  register: configmap_creation
+  ignore_errors: yes
+  tags: [deployment, kubernetes]
+
+- name: Apply frontend deployment
+  shell: |
+    kubectl apply -f "{{ k8s_dir }}/frontend-deployment.yaml"
+  args:
+    executable: /bin/bash
+  register: frontend_deployment
+  ignore_errors: yes
+  tags: [deployment, kubernetes]
   
 - name: Log Kubernetes deployments status
   copy:
