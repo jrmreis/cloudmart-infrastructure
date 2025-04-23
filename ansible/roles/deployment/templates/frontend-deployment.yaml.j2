@@ -30,18 +30,6 @@ spec:
           requests:
             cpu: "{{ k8s_resource_requests.cpu }}"
             memory: "{{ k8s_resource_requests.memory }}"
-        readinessProbe:
-          httpGet:
-            path: /
-            port: {{ frontend_port }}
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        livenessProbe:
-          httpGet:
-            path: /
-            port: {{ frontend_port }}
-          initialDelaySeconds: 60
-          periodSeconds: 20
 ---
 apiVersion: v1
 kind: Service
