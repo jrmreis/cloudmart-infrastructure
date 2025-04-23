@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: cloudmart-frontend
-        image: {{ frontend_ecr_repo }}:{{ frontend_image_tag }}
+        image: "{{ frontend_ecr_repo }}:{{ frontend_image_tag }}"
         ports:
         - containerPort: {{ frontend_port }}
         env:
