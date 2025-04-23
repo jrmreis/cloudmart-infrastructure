@@ -1,6 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: cloudmart-config
-data:
-  backend_url: "http://{{ hostvars['localhost']['backend_lb_url'] | default('cloudmart-backend-service') }}/api"
