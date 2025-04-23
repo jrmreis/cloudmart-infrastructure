@@ -64,6 +64,23 @@
     var: service_account_creation
   when: service_account_creation.stdout is defined
   tags: [deployment, eks, iam, debug]
+
+- name: Create symbolic link for kubectl if needed
+  file:
+    src: /home/{{ ec2_username }}/bin/kubectl
+    dest: /usr/local/bin/kubectl
+    state: link
+  ignore_errors: yes
+  tags: [deployment, kubernetes]
+
+- name: Apply kubectl context
+  shell: |
+    export PATH=$PATH:/home/{{ ec2_username }}/bin:/usr/local/bin
+    aws eks update-kubeconfig --name {{ cluster_name }} --region {{ aws_region }}
+  args:
+    executable: /bin/bash
+  ignore_errors: yes
+  tags: [deployment, kubernetes]
   
 - name: Create backend deployment file
   template:
