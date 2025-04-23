@@ -1,7 +1,5 @@
 ---
 # cloudmart_setup.yml - Main playbook for CloudMart workstation setup
-- include: tasks/system_setup.yml
-- include: tasks/docker_setup.yml
 - name: Configure CloudMart Workstation
   hosts: all
   become: yes
@@ -29,7 +27,7 @@
         group: "{{ ec2_username }}"
         mode: '0755'
         
-    - name: Create logs directory
+    - name: Create CloudMart logs directory
       file:
         path: /var/log/cloudmart
         state: directory
@@ -61,7 +59,7 @@
     - name: Import deployment tasks
       import_tasks: tasks/deployment.yml
       
-    - name: Create utility scripts
+    - name: Import utility scripts tasks
       import_tasks: tasks/utility_scripts.yml
       
     - name: Create user README
@@ -72,12 +70,17 @@
         group: "{{ ec2_username }}"
         mode: '0644'
       
-    - name: Create system_setup.yml
-      template:
-        dest: "mkdir -p /home/ec2-user/cloudmart-infrastructure/ansible/playbooks/tasks && touch /home/ec2-user/cloudmart-infrastructure/ansible/playbooks/tasks/system_setup.yml"
-        owner: "{{ ec2_username }}"
-        group: "{{ ec2_username }}"
-        mode: '0644'
+    - name: Create empty task files if they don't exist
+      shell: |
+        mkdir -p /home/ec2-user/cloudmart-infrastructure/ansible/playbooks/tasks
+        touch /home/ec2-user/cloudmart-infrastructure/ansible/playbooks/tasks/system_setup.yml
+        touch /home/ec2-user/cloudmart-infrastructure/ansible/playbooks/tasks/docker_setup.yml
+        touch /home/ec2-user/cloudmart-infrastructure/ansible/playbooks/tasks/application_setup.yml
+        touch /home/ec2-user/cloudmart-infrastructure/ansible/playbooks/tasks/kubernetes_setup.yml
+        touch /home/ec2-user/cloudmart-infrastructure/ansible/playbooks/tasks/deployment.yml
+        touch /home/ec2-user/cloudmart-infrastructure/ansible/playbooks/tasks/utility_scripts.yml
+      args:
+        creates: /home/ec2-user/cloudmart-infrastructure/ansible/playbooks/tasks/system_setup.yml
       
     - name: Final status check
       shell: |
@@ -101,4 +104,4 @@
         
     - name: Final completion message
       debug:
-        msg: "CloudMart setup completed successfully! Connect via SSH: ssh {{ ec2_username }}@{{ public_ip }}"
+        msg: "CloudMart setup completed successfully! Connect via SSH: ssh {{ ec2_username }}@{{ ansible_host }}"
