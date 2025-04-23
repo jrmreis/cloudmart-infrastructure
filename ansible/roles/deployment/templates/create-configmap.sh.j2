@@ -1,0 +1,24 @@
+#!/bin/bash
+# Wait for backend service to be available
+ATTEMPTS=0
+MAX_ATTEMPTS=15
+SLEEP_TIME=20
+
+until kubectl get svc cloudmart-backend-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null | grep -q "."; do
+  ATTEMPTS=$((ATTEMPTS+1))
+  if [ $ATTEMPTS -ge $MAX_ATTEMPTS ]; then
+    echo "Backend service not available after $MAX_ATTEMPTS attempts"
+    # Default to service name if Load Balancer URL is not available
+    kubectl create configmap cloudmart-config --from-literal=backend_url="http://cloudmart-backend-service/api" --dry-run=client -o yaml | kubectl apply -f -
+    exit 0
+  fi
+  echo "Waiting for backend service to be available (attempt $ATTEMPTS/$MAX_ATTEMPTS)..."
+  sleep $SLEEP_TIME
+done
+
+# Get the LoadBalancer URL
+BACKEND_URL=$(kubectl get svc cloudmart-backend-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+echo "Backend URL: $BACKEND_URL"
+
+# Create or update ConfigMap
+kubectl create configmap cloudmart-config --from-literal=backend_url="http://$BACKEND_URL/api" --dry-run=client -o yaml | kubectl apply -f -
