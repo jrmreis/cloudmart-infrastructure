@@ -113,6 +113,19 @@
   register: k8s_services
   changed_when: false
   tags: [deployment, kubernetes, status]
+
+- name: Validate kubectl configuration
+  shell: kubectl config current-context
+  register: kubectl_context
+  ignore_errors: yes
+  changed_when: false
+  tags: [deployment, kubernetes, validate]
+
+- name: Display current kubectl context
+  debug:
+    var: kubectl_context.stdout
+  when: kubectl_context is defined and kubectl_context.rc == 0
+  tags: [deployment, kubernetes, validate]
   
 - name: Log Kubernetes deployments status
   copy:
