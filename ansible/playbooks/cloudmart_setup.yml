@@ -1,5 +1,7 @@
 ---
 # cloudmart_setup.yml - Main playbook for CloudMart workstation setup
+- include: tasks/system_setup.yml
+- include: tasks/docker_setup.yml
 - name: Configure CloudMart Workstation
   hosts: all
   become: yes
