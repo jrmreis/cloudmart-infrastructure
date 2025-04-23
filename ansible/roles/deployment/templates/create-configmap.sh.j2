@@ -1,4 +1,7 @@
 #!/bin/bash
+# Ensure kubectl is in the PATH
+export PATH=$PATH:/usr/local/bin:/home/{{ ec2_username }}/bin
+
 # Wait for backend service to be available
 ATTEMPTS=0
 MAX_ATTEMPTS=15
