@@ -70,6 +70,13 @@
         group: "{{ ec2_username }}"
         mode: '0644'
       
+    - name: Create system_setup.yml
+      template:
+        dest: "mkdir -p /home/ec2-user/cloudmart-infrastructure/ansible/playbooks/tasks && touch /home/ec2-user/cloudmart-infrastructure/ansible/playbooks/tasks/system_setup.yml"
+        owner: "{{ ec2_username }}"
+        group: "{{ ec2_username }}"
+        mode: '0644'
+      
     - name: Final status check
       shell: |
         echo "Setup completed at $(date)" > /home/ec2-user/setup-complete.log
