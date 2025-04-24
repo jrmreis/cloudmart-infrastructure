@@ -1,0 +1,6 @@
+---
+# Deployment role specific variables
+eks_cluster_status: "UNKNOWN"  # Initial status
+eks_deployment_ready: false    # Flag to track if deployment is ready
+eks_cluster_endpoint: ""       # Store the cluster endpoint
+eks_last_check_time: ""        # Track when we last checked cluster status

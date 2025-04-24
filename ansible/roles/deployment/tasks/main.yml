@@ -27,6 +27,46 @@
   ignore_errors: yes
   tags: [deployment, eks]
 
+- name: Create cluster health check script
+  template:
+    src: cluster-health-check.sh.j2
+    dest: "{{ k8s_dir }}/cluster-health-check.sh"
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0755'
+  tags: [deployment, eks, health]
+
+- name: Get EKS cluster details
+  shell: |
+    aws eks describe-cluster --name {{ cluster_name }} --region {{ aws_region }} --query "cluster" --output json
+  register: eks_cluster_details
+  ignore_errors: yes
+  tags: [deployment, eks, health]
+
+- name: Parse EKS cluster status
+  set_fact:
+    eks_cluster_status: "{{ (eks_cluster_details.stdout | from_json).status | default('UNKNOWN') }}"
+    eks_cluster_endpoint: "{{ (eks_cluster_details.stdout | from_json).endpoint | default('') }}"
+    eks_last_check_time: "{{ ansible_date_time.iso8601 }}"
+  ignore_errors: yes
+  tags: [deployment, eks, health]
+
+- name: Create health status file
+  copy:
+    dest: "{{ k8s_dir }}/cluster_health.json"
+    content: |
+      {
+        "cluster_name": "{{ cluster_name }}",
+        "status": "{{ eks_cluster_status }}",
+        "endpoint": "{{ eks_cluster_endpoint }}",
+        "last_check": "{{ eks_last_check_time }}",
+        "deployment_ready": {{ eks_deployment_ready | to_json }}
+      }
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0644'
+  tags: [deployment, eks, health]
+
 - name: Update kubectl configuration
   shell: aws eks update-kubeconfig --name {{ cluster_name }} --region {{ aws_region }}
   register: kubeconfig_update
@@ -101,19 +141,21 @@
   tags: [deployment, kubernetes]
     
 - name: Apply backend deployment
-  kubernetes.core.k8s:
-    state: present
-    src: "{{ k8s_dir }}/backend-deployment.yaml"
-  become_user: "{{ ec2_username }}"
+  shell: |
+    kubectl apply -f "{{ k8s_dir }}/backend-deployment.yaml"
+  args:
+    executable: /bin/bash
   register: backend_deployment
+  ignore_errors: yes
   tags: [deployment, kubernetes]
-  
+
 - name: Apply frontend deployment
-  kubernetes.core.k8s:
-    state: present
-    src: "{{ k8s_dir }}/frontend-deployment.yaml"
-  become_user: "{{ ec2_username }}"
+  shell: |
+    kubectl apply -f "{{ k8s_dir }}/frontend-deployment.yaml"
+  args:
+    executable: /bin/bash
   register: frontend_deployment
+  ignore_errors: yes
   tags: [deployment, kubernetes]
   
 - name: Wait for services to be provisioned (load balancers take time)
@@ -155,3 +197,34 @@
     group: "{{ ec2_username }}"
     mode: '0644'
   tags: [deployment, kubernetes, logs]
+
+- name: Update deployment ready status
+  set_fact:
+    eks_deployment_ready: "{{ eks_cluster_status == 'ACTIVE' }}"
+  tags: [deployment, eks, health]
+
+- name: Create deployment helper script
+  template:
+    src: deploy-when-ready.sh.j2
+    dest: "{{ k8s_dir }}/deploy-when-ready.sh"
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0755'
+  tags: [deployment, eks, health]
+
+- name: Final deployment status update
+  copy:
+    dest: "{{ k8s_dir }}/deployment_status.txt"
+    content: |
+      Deployment Status: {{ 'Ready' if eks_deployment_ready else 'Not Ready' }}
+      Cluster Status: {{ eks_cluster_status }}
+      Last Check Time: {{ eks_last_check_time }}
+      
+      If the deployment is not ready, you can:
+      1. Check the cluster status: aws eks describe-cluster --name {{ cluster_name }} --region {{ aws_region }}
+      2. Wait for the cluster to be active and then run: {{ k8s_dir }}/cluster-health-check.sh --wait
+      3. Once active, manually apply Kubernetes manifests: kubectl apply -f {{ k8s_dir }}/backend-deployment.yaml
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0644'
+  tags: [deployment, eks, health]

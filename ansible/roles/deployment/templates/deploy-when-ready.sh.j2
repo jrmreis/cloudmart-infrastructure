@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# Deploy CloudMart when EKS cluster is ready
+# Usage: ./deploy-when-ready.sh [--wait]
+
+WAIT_MODE=0
+
+# Check for wait flag
+if [[ "$1" == "--wait" ]]; then
+  WAIT_MODE=1
+  echo "Running in wait mode - will wait until cluster is active"
+else
+  echo "Running in check mode - will deploy if cluster is active"
+fi
+
+# Run the health check script
+if [ $WAIT_MODE -eq 1 ]; then
+  {{ k8s_dir }}/cluster-health-check.sh --wait
+else
+  {{ k8s_dir }}/cluster-health-check.sh
+fi
+
+# Check if the cluster is now active
+CLUSTER_STATUS=$(cat {{ k8s_dir }}/cluster_health.json | jq -r '.status')
+
+if [ "$CLUSTER_STATUS" == "ACTIVE" ]; then
+  echo "EKS Cluster is active. Deploying CloudMart applications..."
+  
+  # Update kubectl configuration
+  aws eks update-kubeconfig --name {{ cluster_name }} --region {{ aws_region }}
+  
+  # Fix the backend deployment file if needed
+  sed -i "s|{{ '{{' }} hostvars\[inventory_hostname\].backend_ecr_repo {{ '}}' }}|{{ backend_ecr_repo }}|g" {{ k8s_dir }}/backend-deployment.yaml
+  
+  # Fix the frontend deployment file if needed
+  sed -i "s|{{ '{{' }} hostvars\[inventory_hostname\].frontend_ecr_repo {{ '}}' }}|{{ frontend_ecr_repo }}|g" {{ k8s_dir }}/frontend-deployment.yaml
+  
+  # Apply backend deployment
+  echo "Applying backend deployment..."
+  kubectl apply -f {{ k8s_dir }}/backend-deployment.yaml
+  
+  # Create ConfigMap
+  echo "Creating ConfigMap..."
+  kubectl create configmap cloudmart-config --from-literal=backend_url="http://cloudmart-backend-service/api" --dry-run=client -o yaml | kubectl apply -f -
+  
+  # Apply frontend deployment
+  echo "Applying frontend deployment..."
+  kubectl apply -f {{ k8s_dir }}/frontend-deployment.yaml
+  
+  # Check deployment status
+  echo "Checking deployment status..."
+  kubectl get pods
+  kubectl get services
+  
+  echo "Deployment complete! Check service endpoints:"
+  kubectl get services | grep -E 'cloudmart-(backend|frontend)-service'
+else
+  echo "EKS Cluster is not active yet (status: $CLUSTER_STATUS). Cannot deploy applications."
+  echo "Run with --wait flag to wait for the cluster to become active."
+  exit 1
+fi
