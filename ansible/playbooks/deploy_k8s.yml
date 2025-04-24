@@ -1,0 +1,88 @@
+---
+# deploy_k8s.yml - Deploy to existing EKS cluster
+- name: Deploy to EKS Cluster
+  hosts: all
+  become: yes
+  vars:
+    aws_region: "us-east-1"
+    cluster_name: "cloudmart"
+    ec2_username: "ec2-user"
+    log_dir: "/home/ec2-user/logs"
+    k8s_dir: "/home/ec2-user/k8s"
+    backend_port: 5000
+    frontend_port: 5001
+    backend_ecr_repo: "445567090747.dkr.ecr.us-east-1.amazonaws.com/cloudmart-backend"
+    frontend_ecr_repo: "445567090747.dkr.ecr.us-east-1.amazonaws.com/cloudmart-frontend"
+    backend_image_tag: "latest"
+    frontend_image_tag: "latest"
+    backend_replicas: 1
+    frontend_replicas: 1
+    k8s_resource_limits:
+      cpu: "0.25"
+      memory: "256Mi"
+    k8s_resource_requests:
+      cpu: "0.1"
+      memory: "128Mi"
+  
+  tasks:
+    - name: Update kubectl configuration
+      shell: |
+        export AWS_REGION={{ aws_region }}
+        aws eks update-kubeconfig --name {{ cluster_name }} --region {{ aws_region }}
+      environment:
+        AWS_REGION: "{{ aws_region }}"
+      args:
+        executable: /bin/bash
+      register: kubectl_config
+      
+    - name: Create backend deployment file
+      template:
+        src: "../roles/deployment/templates/backend-deployment.yaml.j2"
+        dest: "{{ k8s_dir }}/backend-deployment.yaml"
+        owner: "{{ ec2_username }}"
+        group: "{{ ec2_username }}"
+        mode: '0644'
+        
+    - name: Create frontend deployment file
+      template:
+        src: "../roles/deployment/templates/frontend-deployment.yaml.j2"
+        dest: "{{ k8s_dir }}/frontend-deployment.yaml"
+        owner: "{{ ec2_username }}"
+        group: "{{ ec2_username }}"
+        mode: '0644'
+        
+    - name: Wait for DNS propagation
+      shell: |
+        for i in {1..10}; do
+          if kubectl get nodes &>/dev/null; then
+            echo "API server reachable!"
+            exit 0
+          fi
+          echo "Waiting for API server to be reachable (attempt $i)..."
+          sleep 30
+        done
+        echo "API server still not reachable after 5 minutes"
+        exit 1
+      args:
+        executable: /bin/bash
+      ignore_errors: yes
+      
+    - name: Apply backend deployment
+      shell: |
+        kubectl apply -f "{{ k8s_dir }}/backend-deployment.yaml"
+      args:
+        executable: /bin/bash
+      register: backend_deployment
+      ignore_errors: yes
+      
+    - name: Apply frontend deployment
+      shell: |
+        kubectl apply -f "{{ k8s_dir }}/frontend-deployment.yaml"
+      args:
+        executable: /bin/bash
+      register: frontend_deployment
+      ignore_errors: yes
+      
+    - name: Final status
+      debug:
+        msg: "Deployment tasks completed. Run /home/ec2-user/verify-eks.sh to manually verify the connection once DNS has fully propagated."

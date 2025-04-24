@@ -79,6 +79,11 @@
   ignore_errors: yes
   tags: [deployment, eks, health]
 
+- name: Set deployment readiness based on cluster status
+  set_fact:
+    cluster_is_ready: "{{ eks_cluster_status == 'ACTIVE' }}"
+  tags: [deployment, eks, health]
+
 - name: Create health status file
   copy:
     dest: "{{ k8s_dir }}/cluster_health.json"
@@ -88,7 +93,7 @@
         "status": "{{ eks_cluster_status }}",
         "endpoint": "{{ eks_cluster_endpoint }}",
         "last_check": "{{ eks_last_check_time }}",
-        "deployment_ready": {{ eks_deployment_ready | to_json }}
+        "deployment_ready": {{ cluster_is_ready | to_json }}
       }
     owner: "{{ ec2_username }}"
     group: "{{ ec2_username }}"
@@ -133,12 +138,19 @@
   when: service_account_creation.stdout is defined
   tags: [deployment, eks, iam, debug]
 
-- name: Apply kubectl context
+- name: Apply kubectl context with retry
   shell: |
     export AWS_REGION={{ aws_region }}
     aws eks update-kubeconfig --name {{ cluster_name }} --region {{ aws_region }}
+    # Wait for DNS to propagate
+    for i in {1..10}; do
+      kubectl get nodes && break
+      echo "Waiting for API server to be reachable (attempt $i)..."
+      sleep 30
+    done
   environment:
     AWS_REGION: "{{ aws_region }}"
+    KUBECONFIG: "/home/{{ ec2_username }}/.kube/config"
   args:
     executable: /bin/bash
   register: kubectl_context_result
@@ -196,12 +208,23 @@
   tags: [deployment, kubernetes]
     
 - name: Get Kubernetes services status
-  shell: kubectl get services
+  shell: |
+    export AWS_REGION={{ aws_region }}
+    export KUBECONFIG=/home/{{ ec2_username }}/.kube/config
+    # Try multiple times with increasing delays
+    for i in {1..5}; do
+      if kubectl get services; then
+        break
+      else
+        echo "Attempt $i: Unable to connect to Kubernetes API server. Waiting longer..."
+        sleep $((i * 20))
+      fi
+    done
   args:
     executable: /bin/bash
-  become_user: "{{ ec2_username }}"
   register: k8s_services
   changed_when: false
+  ignore_errors: yes
   tags: [deployment, kubernetes, status]
 
 - name: Validate kubectl configuration

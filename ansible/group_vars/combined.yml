@@ -1,0 +1,40 @@
+---
+# Global vars
+aws_region: "us-east-1"
+cluster_name: "cloudmart"
+ec2_username: "ec2-user"
+log_dir: "/home/ec2-user/logs"
+
+# AWS ECR repositories
+backend_ecr_repo: "445567090747.dkr.ecr.us-east-1.amazonaws.com/cloudmart-backend"
+frontend_ecr_repo: "445567090747.dkr.ecr.us-east-1.amazonaws.com/cloudmart-frontend"
+
+# Docker image names and tags
+backend_image_name: "cloudmart-backend"
+backend_image_tag: "latest" 
+frontend_image_name: "cloudmart-frontend"
+frontend_image_tag: "latest"
+
+# App directories
+app_dir: "/home/ec2-user/challenge-day2"
+backend_dir: "{{ app_dir }}/backend"
+frontend_dir: "{{ app_dir }}/frontend"
+k8s_dir: "/home/ec2-user/k8s"
+
+# Application variables
+backend_port: 5000
+frontend_port: 5001
+backend_container_name: cloudmart-backend-container
+frontend_container_name: cloudmart-frontend-container
+
+# Environment-specific variables
+backend_replicas: 1
+frontend_replicas: 1
+k8s_resource_limits:
+  cpu: "0.25"
+  memory: "256Mi"
+k8s_resource_requests:
+  cpu: "0.1"
+  memory: "128Mi"
+eks_node_type: "t3.small"
+eks_nodes: 1

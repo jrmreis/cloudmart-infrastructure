@@ -18,4 +18,4 @@ k8s_resource_limits:
 k8s_resource_requests:
   cpu: "{{ k8s_resource_requests.cpu | default('0.1') }}"
   memory: "{{ k8s_resource_requests.memory | default('128Mi') }}"
-eks_deployment_ready: "{{ eks_deployment_ready | default(false) }}"
+#eks_deployment_ready: "{{ eks_deployment_ready | default(false) }}"
