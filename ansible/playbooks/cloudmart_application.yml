@@ -1,0 +1,29 @@
+---
+# cloudmart_application.yml - Playbook for application deployment only
+- name: Verify EKS cluster is ready
+  shell: |
+    export AWS_REGION={{ aws_region }}
+    STATUS=$(aws eks describe-cluster --name {{ cluster_name }} --region {{ aws_region }} --query "cluster.status" --output text)
+    if [ "$STATUS" != "ACTIVE" ]; then
+      echo "Cluster is not active yet. Current status: $STATUS"
+      exit 1
+    fi
+    aws eks update-kubeconfig --name {{ cluster_name }} --region {{ aws_region }}
+    kubectl get nodes
+  environment:
+    AWS_REGION: "{{ aws_region }}"
+  register: cluster_verification
+  until: cluster_verification.rc == 0
+  retries: 10
+  delay: 60
+  ignore_errors: no
+  tags: [deployment, kubernetes, verify]
+
+- name: Deploy CloudMart Application
+  hosts: all
+  become: yes
+  vars:
+    environment: "{{ lookup('env', 'ENVIRONMENT') | default('homol') }}"
+  
+  roles:
+    - role: "../roles/application"

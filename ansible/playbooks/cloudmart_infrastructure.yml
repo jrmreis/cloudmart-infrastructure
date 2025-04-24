@@ -1,0 +1,26 @@
+---
+# cloudmart_infrastructure.yml - Playbook for infrastructure setup only
+- name: Setup CloudMart Infrastructure
+  hosts: all
+  become: yes
+  vars:
+    environment: "{{ lookup('env', 'ENVIRONMENT') | default('homol') }}"
+  
+  pre_tasks:
+    - name: Wait for system to become reachable
+      wait_for_connection:
+        timeout: 300
+        
+    - name: Create logs directory
+      file:
+        path: "{{ log_dir }}"
+        state: directory
+        owner: "{{ ec2_username }}"
+        group: "{{ ec2_username }}"
+        mode: '0755'
+  
+  roles:
+    - role: "../roles/common"
+    - role: "../roles/docker"
+    - role: "../roles/kubernetes"
+    - role: "../roles/deployment"

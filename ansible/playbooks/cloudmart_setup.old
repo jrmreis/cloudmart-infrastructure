@@ -1,0 +1,107 @@
+---
+# cloudmart_setup.yml - Main playbook for CloudMart workstation setup
+- name: Configure CloudMart Workstation
+  hosts: all
+  become: yes
+  vars:
+    log_dir: "/home/ec2-user/logs"
+    aws_region: "us-east-1"
+    cluster_name: "cloudmart"
+    ec2_username: "ec2-user"
+    
+  pre_tasks:
+    - name: Wait for system to become reachable
+      wait_for_connection:
+        timeout: 300
+        
+    - name: Gather EC2 facts
+      setup:
+        gather_subset: all
+        
+  tasks:
+    - name: Create logs directory
+      file:
+        path: "{{ log_dir }}"
+        state: directory
+        owner: "{{ ec2_username }}"
+        group: "{{ ec2_username }}"
+        mode: '0755'
+        
+    - name: Create CloudMart logs directory
+      file:
+        path: /var/log/cloudmart
+        state: directory
+        mode: '0755'
+      become: yes
+    
+    - name: Create master log file with system information
+      copy:
+        dest: "{{ log_dir }}/master_{{ ansible_date_time.date }}.txt"
+        content: |
+          ========== CLOUDMART SETUP LOG ==========
+          Started at: {{ ansible_date_time.iso8601 }}
+          Hostname: {{ ansible_hostname }}
+          IP Address: {{ ansible_default_ipv4.address | default('localhost') }}
+          =========================================
+          
+    - name: Import system setup tasks
+      import_tasks: tasks/system_setup.yml
+    
+    - name: Import Docker setup tasks
+      import_tasks: tasks/docker_setup.yml
+    
+    - name: Import application setup tasks
+      import_tasks: tasks/application_setup.yml
+      
+    - name: Import Kubernetes setup tasks
+      import_tasks: tasks/kubernetes_setup.yml
+      
+    - name: Import deployment tasks
+      import_tasks: tasks/deployment.yml
+      
+    - name: Import utility scripts tasks
+      import_tasks: tasks/utility_scripts.yml
+      
+    - name: Create user README
+      template:
+        src: "templates/README.md.j2"
+        dest: "/home/ec2-user/README.md"
+        owner: "{{ ec2_username }}"
+        group: "{{ ec2_username }}"
+        mode: '0644'
+      
+    - name: Create empty task files if they don't exist
+      shell: |
+        mkdir -p /home/ec2-user/cloudmart-infrastructure/ansible/playbooks/tasks
+        touch /home/ec2-user/cloudmart-infrastructure/ansible/playbooks/tasks/system_setup.yml
+        touch /home/ec2-user/cloudmart-infrastructure/ansible/playbooks/tasks/docker_setup.yml
+        touch /home/ec2-user/cloudmart-infrastructure/ansible/playbooks/tasks/application_setup.yml
+        touch /home/ec2-user/cloudmart-infrastructure/ansible/playbooks/tasks/kubernetes_setup.yml
+        touch /home/ec2-user/cloudmart-infrastructure/ansible/playbooks/tasks/deployment.yml
+        touch /home/ec2-user/cloudmart-infrastructure/ansible/playbooks/tasks/utility_scripts.yml
+      args:
+        creates: /home/ec2-user/cloudmart-infrastructure/ansible/playbooks/tasks/system_setup.yml
+      
+    - name: Final status check
+      shell: |
+        echo "Setup completed at $(date)" > /home/ec2-user/setup-complete.log
+        echo "Docker container status:" >> /home/ec2-user/setup-complete.log
+        docker ps >> /home/ec2-user/setup-complete.log
+        echo "Kubernetes status:" >> /home/ec2-user/setup-complete.log
+        kubectl get pods >> /home/ec2-user/setup-complete.log
+      args:
+        executable: /bin/bash
+      register: final_status
+      become_user: "{{ ec2_username }}"
+      
+    - name: Archive log files
+      archive:
+        path: "{{ log_dir }}"
+        dest: "/home/ec2-user/logs-archive-{{ ansible_date_time.date }}.tar.gz"
+        owner: "{{ ec2_username }}"
+        group: "{{ ec2_username }}"
+        format: gz
+        
+    - name: Final completion message
+      debug:
+        msg: "CloudMart setup completed successfully! Connect via SSH: ssh {{ ec2_username }}@{{ ansible_host }}"

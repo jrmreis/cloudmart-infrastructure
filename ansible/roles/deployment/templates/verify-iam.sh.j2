@@ -1,0 +1,9 @@
+#!/bin/bash
+export AWS_REGION={{ aws_region }}
+
+echo "Verifying IAM permissions for EKS cluster creation..."
+aws iam get-user
+aws eks list-clusters --region {{ aws_region }}
+aws ec2 describe-vpcs --region {{ aws_region }}
+aws ec2 describe-subnets --region {{ aws_region }}
+aws iam list-roles | grep -i eks

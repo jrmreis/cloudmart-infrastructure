@@ -1,8 +1,30 @@
 ---
 # Tasks for creating and deploying to the EKS cluster
 
+- name: Create IAM verification script
+  template:
+    src: verify-iam.sh.j2
+    dest: "{{ k8s_dir }}/verify-iam.sh"
+    owner: "{{ ec2_username }}"
+    group: "{{ ec2_username }}"
+    mode: '0755'
+  tags: [deployment, iam]
+
+- name: Verify IAM permissions
+  shell: |
+    {{ k8s_dir }}/verify-iam.sh
+  args:
+    executable: /bin/bash
+  register: iam_verification
+  ignore_errors: yes
+  tags: [deployment, iam]
+
 - name: Create EKS cluster (this will take ~15 minutes)
   shell: |
+    export AWS_REGION={{ aws_region }}
+    VPC_ID=$(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text)
+    SUBNET_IDS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" --query "Subnets[*].SubnetId" --output text | tr '\t' ',')
+    
     eksctl create cluster \
       --name {{ cluster_name }} \
       --region {{ aws_region }} \
@@ -11,19 +33,25 @@
       --nodes {{ eks_nodes }} \
       --with-oidc \
       --managed || true
+  environment:
+    AWS_REGION: "{{ aws_region }}"
   register: create_cluster
   args:
     executable: /bin/bash
-  async: 1800  # 30 minutes
+  async: 2700  # 45 minutes
   poll: 0
   tags: [deployment, eks]
 
 - name: Check EKS cluster creation status
-  shell: eksctl get cluster --name {{ cluster_name }} --region {{ aws_region }} || echo "Cluster creation in progress"
+  shell: |
+    export AWS_REGION={{ aws_region }}
+    eksctl get cluster --name {{ cluster_name }} --region {{ aws_region }} || echo "Cluster creation in progress"
+  environment:
+    AWS_REGION: "{{ aws_region }}"
   register: cluster_status
-  until: "'{{ cluster_name }}' in cluster_status.stdout"
-  retries: 10
-  delay: 60
+  until: "'{{ cluster_name }}' in cluster_status.stdout and 'ACTIVE' in cluster_status.stdout"
+  retries: 30
+  delay: 120  # Check every 2 minutes
   ignore_errors: yes
   tags: [deployment, eks]
 
@@ -105,20 +133,15 @@
   when: service_account_creation.stdout is defined
   tags: [deployment, eks, iam, debug]
 
-- name: Create symbolic link for kubectl if needed
-  file:
-    src: /home/{{ ec2_username }}/bin/kubectl
-    dest: /usr/local/bin/kubectl
-    state: link
-  ignore_errors: yes
-  tags: [deployment, kubernetes]
-
 - name: Apply kubectl context
   shell: |
-    export PATH=$PATH:/home/{{ ec2_username }}/bin:/usr/local/bin
+    export AWS_REGION={{ aws_region }}
     aws eks update-kubeconfig --name {{ cluster_name }} --region {{ aws_region }}
+  environment:
+    AWS_REGION: "{{ aws_region }}"
   args:
     executable: /bin/bash
+  register: kubectl_context_result
   ignore_errors: yes
   tags: [deployment, kubernetes]
   
@@ -138,6 +161,14 @@
     owner: "{{ ec2_username }}"
     group: "{{ ec2_username }}"
     mode: '0644'
+  tags: [deployment, kubernetes]
+
+- name: Create symbolic link for kubectl if needed
+  file:
+    src: /home/{{ ec2_username }}/bin/kubectl
+    dest: /usr/bin/kubectl
+    state: link
+    force: yes
   tags: [deployment, kubernetes]
     
 - name: Apply backend deployment
