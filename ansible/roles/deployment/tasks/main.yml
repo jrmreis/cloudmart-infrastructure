@@ -257,6 +257,16 @@
     eks_deployment_ready: "{{ eks_cluster_status == 'ACTIVE' }}"
   tags: [deployment, eks, health]
 
+# After kubectl configuration is updated in your deployment role
+- name: Apply CloudMart ConfigMap
+  shell: |
+    kubectl apply -f "{{ k8s_dir }}/cloudmart-config.yaml"
+  args:
+    executable: /bin/bash
+  register: configmap_result
+  ignore_errors: no
+  tags: [deployment, kubernetes, config]
+
 - name: Create deployment helper script
   template:
     src: deploy-when-ready.sh.j2
