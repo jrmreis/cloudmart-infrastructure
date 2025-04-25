@@ -32,7 +32,20 @@
         content: "{{ eksctl_version.stdout }}"
   tags: [kubernetes, eksctl]
 
-# This should go in ansible/roles/kubernetes/tasks/main.yml
+- name: Create EKS cluster
+  shell: |
+    eksctl create cluster \
+    --name=cloudmart \
+    --region=us-east-1 \
+    --version=1.32 \
+    --without-nodegroup
+  args:
+    executable: /bin/bash
+  register: create_cluster_result
+  changed_when: create_cluster_result.rc == 0
+  failed_when: create_cluster_result.rc != 0 and "already exists" not in create_cluster_result.stderr
+  tags: [kubernetes, eks]
+
 - name: Create EKS nodegroup for CloudMart cluster
   shell: |
     eksctl create nodegroup \
