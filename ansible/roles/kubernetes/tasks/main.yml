@@ -32,6 +32,32 @@
         content: "{{ eksctl_version.stdout }}"
   tags: [kubernetes, eksctl]
 
+# This should go in ansible/roles/kubernetes/tasks/main.yml
+- name: Create EKS nodegroup for CloudMart cluster
+  shell: |
+    eksctl create nodegroup \
+    --cluster=cloudmart \
+    --region=us-east-1 \
+    --name=standard-workers \
+    --node-type=t3.small \
+    --nodes=1 \
+    --nodes-min=1 \
+    --nodes-max=3 \
+    --managed
+  args:
+    executable: /bin/bash
+  register: create_nodegroup_result
+  changed_when: create_nodegroup_result.rc == 0
+  failed_when: create_nodegroup_result.rc != 0 and "already exists" not in create_nodegroup_result.stderr
+
+# Optional: Add a log task to record the nodegroup creation
+- name: Log nodegroup creation result
+  lineinfile:
+    path: "{{ log_dir }}/kubernetes_setup.log"
+    line: "EKS nodegroup creation result: {{ create_nodegroup_result.stdout }}"
+    create: yes
+  when: create_nodegroup_result is defined
+
 - name: Install kubectl
   block:
     - name: Download kubectl

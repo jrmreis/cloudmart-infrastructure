@@ -1,29 +1,66 @@
 ---
 # cloudmart_application.yml - Playbook for application deployment only
-- name: Verify EKS cluster is ready
-  shell: |
-    export AWS_REGION={{ aws_region }}
-    STATUS=$(aws eks describe-cluster --name {{ cluster_name }} --region {{ aws_region }} --query "cluster.status" --output text)
-    if [ "$STATUS" != "ACTIVE" ]; then
-      echo "Cluster is not active yet. Current status: $STATUS"
-      exit 1
-    fi
-    aws eks update-kubeconfig --name {{ cluster_name }} --region {{ aws_region }}
-    kubectl get nodes
-  environment:
-    AWS_REGION: "{{ aws_region }}"
-  register: cluster_verification
-  until: cluster_verification.rc == 0
-  retries: 10
-  delay: 60
-  ignore_errors: no
-  tags: [deployment, kubernetes, verify]
-
 - name: Deploy CloudMart Application
   hosts: all
   become: yes
   vars:
-    environment: "{{ lookup('env', 'ENVIRONMENT') | default('homol') }}"
+    aws_region: "us-east-1"
+    cluster_name: "cloudmart"
+    ec2_username: "ec2-user"
+    log_dir: "/home/ec2-user/logs"
+    k8s_dir: "/home/ec2-user/k8s"
   
-  roles:
-    - role: "../roles/application"
+  tasks:
+    - name: Verify EKS cluster is ready
+      shell: |
+        export AWS_REGION={{ aws_region }}
+        STATUS=$(aws eks describe-cluster --name {{ cluster_name }} --region {{ aws_region }} --query "cluster.status" --output text)
+        if [ "$STATUS" != "ACTIVE" ]; then
+          echo "Cluster is not active yet. Current status: $STATUS"
+          exit 1
+        fi
+        aws eks update-kubeconfig --name {{ cluster_name }} --region {{ aws_region }}
+        kubectl get nodes
+      environment:
+        AWS_REGION: "{{ aws_region }}"
+      register: cluster_verification
+      ignore_errors: yes
+      
+    - name: Display cluster status
+      debug:
+        var: cluster_verification.stdout_lines
+      when: cluster_verification.stdout is defined
+      
+    - name: Apply backend deployment
+      shell: |
+        kubectl apply -f "{{ k8s_dir }}/backend-deployment.yaml"
+      args:
+        executable: /bin/bash
+      register: backend_deployment
+      when: cluster_verification.rc == 0
+      
+    - name: Apply frontend deployment
+      shell: |
+        kubectl apply -f "{{ k8s_dir }}/frontend-deployment.yaml"
+      args:
+        executable: /bin/bash
+      register: frontend_deployment
+      when: cluster_verification.rc == 0
+      
+    - name: Wait for services to be provisioned
+      pause:
+        seconds: 60
+        prompt: "Waiting for Kubernetes services to be provisioned..."
+      when: cluster_verification.rc == 0
+      
+    - name: Get Kubernetes services
+      shell: kubectl get services
+      args:
+        executable: /bin/bash
+      register: k8s_services
+      when: cluster_verification.rc == 0
+      
+    - name: Display Kubernetes services
+      debug:
+        var: k8s_services.stdout_lines
+      when: k8s_services.stdout is defined
