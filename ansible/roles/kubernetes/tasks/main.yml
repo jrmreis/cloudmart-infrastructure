@@ -54,17 +54,7 @@
     group: "{{ ec2_username }}"
     mode: '0644'
   tags: [kubernetes, config]
-  
-- name: Apply CloudMart ConfigMap
-  shell: |
-    kubectl apply -f "{{ k8s_dir }}/cloudmart-config.yaml"
-  args:
-    executable: /bin/bash
-  register: configmap_result
-  changed_when: configmap_result.rc == 0
-  failed_when: configmap_result.rc != 0 and "already exists" not in configmap_result.stderr
-  tags: [kubernetes, config]
-  
+    
 - name: Create EKS nodegroup for CloudMart cluster
   shell: |
     eksctl create nodegroup \
