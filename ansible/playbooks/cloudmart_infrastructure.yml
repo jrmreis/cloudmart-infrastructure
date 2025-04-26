@@ -5,8 +5,34 @@
   become: yes
   vars:
     environment: "{{ lookup('env', 'ENVIRONMENT') | default('homol') }}"
+    aws_profile: eksuser
+    eks_cluster_name: cloudmart-cluster
+    region: us-east-1  # Adjust according to your region
   
   pre_tasks:
+    # Check AWS profile and configure environment
+    - name: Check if AWS profile is configured
+      shell: aws configure list --profile {{ aws_profile }}
+      register: aws_profile_check
+      ignore_errors: true
+      changed_when: false
+      
+    - name: Fail if AWS profile is not configured
+      fail:
+        msg: "AWS profile 'eksuser' is not configured. Please set it up using 'aws configure --profile eksuser'"
+      when: aws_profile_check.rc != 0
+      
+    - name: Configure AWS environment variables
+      shell: |
+        export AWS_PROFILE={{ aws_profile }}
+        export AWS_DEFAULT_REGION={{ region }}
+      changed_when: false
+
+    - name: Update kubeconfig for EKS cluster as eksuser
+      shell: aws eks update-kubeconfig --name {{ eks_cluster_name }} --region {{ region }} --profile {{ aws_profile }}
+      changed_when: true
+    
+    # Original pre-tasks
     - name: Wait for system to become reachable
       wait_for_connection:
         timeout: 300
