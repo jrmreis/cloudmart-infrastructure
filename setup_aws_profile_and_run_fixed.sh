@@ -58,6 +58,17 @@ eks_cluster_name: "$EKS_CLUSTER_NAME"
 kubernetes_version: "$KUBERNETES_VERSION"
 EOF
 
+# Check which environment file exists
+ENVFILES=""
+if [ -f "ansible/group_vars/homol.yml" ]; then
+    ENVFILES="$ENVFILES -e @ansible/group_vars/homol.yml"
+    echo "Using homol.yml environment file"
+fi
+if [ -f "ansible/group_vars/combined.yml" ]; then
+    ENVFILES="$ENVFILES -e @ansible/group_vars/combined.yml"
+    echo "Using combined.yml environment file"
+fi
+
 # Run Ansible playbook
 echo "Running Ansible playbook..."
 ansible-playbook ansible/playbooks/cloudmart_infrastructure.yml \
@@ -65,8 +76,7 @@ ansible-playbook ansible/playbooks/cloudmart_infrastructure.yml \
     --connection=local \
     -e "ansible_python_interpreter=/usr/bin/python3" \
     -e "@ansible_vars.yml" \
-    -e "@ansible/group_vars/combined.yml" \
-    -e "@ansible/group_vars/dev.yml" \
+    $ENVFILES \
     --become
 
 # Check if playbook execution was successful
