@@ -1,52 +1,99 @@
 ---
-# cloudmart_infrastructure.yml - Playbook for infrastructure setup only
+# Modified cloudmart_infrastructure.yml
+# This playbook sets up the CloudMart Infrastructure with proper AWS profile configuration
+
 - name: Setup CloudMart Infrastructure
-  hosts: all
-  become: yes
-  vars:
-    environment: "{{ lookup('env', 'ENVIRONMENT') | default('homol') }}"
-    aws_profile: eksuser
-    eks_cluster_name: cloudmart-cluster
-    region: us-east-1  # Adjust according to your region
+  hosts: "{{ hosts | default('localhost') }}"
+  connection: "{{ connection | default('local') }}"
+  gather_facts: yes
   
   pre_tasks:
-    # Check AWS profile and configure environment
-    - name: Check if AWS profile is configured
-      shell: aws configure list --profile {{ aws_profile }}
+    - name: Ensure AWS CLI is installed
+      package:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - awscli
+      become: yes
+      ignore_errors: yes
+      
+    - name: Configure AWS profile for eksuser
+      ansible.builtin.shell: |
+        aws configure set aws_access_key_id "{{ aws_access_key }}" --profile eksuser
+        aws configure set aws_secret_access_key "{{ aws_secret_key }}" --profile eksuser
+        aws configure set region "{{ aws_region }}" --profile eksuser
+        aws configure set output "{{ aws_output_format | default('json') }}" --profile eksuser
+      no_log: true
+      
+    - name: Verify AWS profile is configured
+      ansible.builtin.shell: aws configure list --profile eksuser
       register: aws_profile_check
-      ignore_errors: true
+      failed_when: false
       changed_when: false
-      
-    - name: Fail if AWS profile is not configured
-      fail:
-        msg: "AWS profile 'eksuser' is not configured. Please set it up using 'aws configure --profile eksuser'"
-      when: aws_profile_check.rc != 0
-      
-    - name: Configure AWS environment variables
-      shell: |
-        export AWS_PROFILE={{ aws_profile }}
-        export AWS_DEFAULT_REGION={{ region }}
-      changed_when: false
-
-    - name: Update kubeconfig for EKS cluster as eksuser
-      shell: aws eks update-kubeconfig --name {{ eks_cluster_name }} --region {{ region }} --profile {{ aws_profile }}
-      changed_when: true
     
-    # Original pre-tasks
+    - name: Display AWS profile configuration status
+      debug:
+        msg: "AWS profile 'eksuser' configuration status: {{ 'Configured' if aws_profile_check.rc == 0 else 'Failed' }}"
+    
+    - name: Set AWS region environment variable
+      ansible.builtin.shell: export AWS_DEFAULT_REGION={{ aws_region }}
+      args:
+        executable: /bin/bash
+    
+    - name: Update kubeconfig for EKS cluster
+      ansible.builtin.shell: aws eks update-kubeconfig --name {{ eks_cluster_name }} --region {{ aws_region }}
+      register: kubeconfig_result
+      failed_when: false
+      ignore_errors: yes
+      
+    - name: Display kubeconfig update status
+      debug:
+        msg: "Kubeconfig update status: {{ 'Success' if kubeconfig_result.rc == 0 else 'Failed - ' + kubeconfig_result.stderr }}"
+    
     - name: Wait for system to become reachable
       wait_for_connection:
         timeout: 300
-        
+    
     - name: Create logs directory
       file:
-        path: "{{ log_dir }}"
+        path: "/home/{{ ansible_user }}/logs"
         state: directory
-        owner: "{{ ec2_username }}"
-        group: "{{ ec2_username }}"
-        mode: '0755'
-  
+        mode: 0755
+
   roles:
-    - role: "../roles/common"
-    - role: "../roles/docker"
-    - role: "../roles/kubernetes"
-    - role: "../roles/deployment"
+    - ../roles/common
+    - ../roles/docker
+    - ../roles/kubernetes
+    
+  post_tasks:
+    - name: Check if EKS cluster exists
+      ansible.builtin.shell: >
+        aws eks describe-cluster --name {{ eks_cluster_name }} --region {{ aws_region }}
+      register: cluster_check
+      failed_when: false
+      changed_when: false
+      
+    - name: Display EKS cluster status
+      debug:
+        msg: "EKS cluster '{{ eks_cluster_name }}' status: {{ 'Exists' if cluster_check.rc == 0 else 'Does not exist' }}"
+        
+    - name: Create EKS cluster if it doesn't exist
+      ansible.builtin.shell: >
+        eksctl create cluster 
+        --name={{ eks_cluster_name }} 
+        --region={{ aws_region }} 
+        --version={{ kubernetes_version | default('1.32') }} 
+        --without-nodegroup
+      when: cluster_check.rc != 0
+      
+    - name: Create k8s directory if it doesn't exist
+      file:
+        path: "/home/{{ ansible_user }}/k8s"
+        state: directory
+        mode: 0755
+      
+    - name: Create CloudMart ConfigMap template
+      template:
+        src: "../templates/cloudmart-configmap.yaml.j2"
+        dest: "/home/{{ ansible_user }}/k8s/cloudmart-configmap.yaml"
+        mode: 0644
